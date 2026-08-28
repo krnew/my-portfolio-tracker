@@ -1,6 +1,6 @@
 # My Portfolio
 
-เว็บพอร์ตส่วนตัว แทนที่ Portseido — Node server เปล่า (ไม่มี dependency ภายนอกเลย) + HTML/JS ธรรมดา ไม่มี framework ไม่มี build step ฐานข้อมูลคือไฟล์ `data/transactions.csv` ที่เปิดด้วย Excel ได้ตรงๆ
+เว็บพอร์ตส่วนตัว Node server เปล่า (ไม่มี dependency ภายนอกเลย) + HTML/JS ธรรมดา ไม่มี framework ไม่มี build step ฐานข้อมูลคือไฟล์ `data/transactions.csv` ที่เปิดด้วย Excel ได้ตรงๆ
 
 รองรับทั้ง **หุ้น/ETF/คริปโต** (ดึงราคาจาก Yahoo Finance) และ **ทองคำไทย** (ราคาสมาคมค้าทองคำ กรอกเป็นกรัม) ในพอร์ตเดียวกัน พร้อมแปลงสกุลเงินให้อัตโนมัติ
 
