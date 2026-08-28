@@ -1,0 +1,12 @@
+# Real portfolio data and everything derived from it - never commit this.
+# The server creates this folder automatically on first write, so a fresh
+# clone works fine with it absent (starts as an empty portfolio).
+data/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+
+# Claude Code session-internal state, not project source
+.claude/

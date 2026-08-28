@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance - My Portfolio</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">My Portfolio</div>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/transactions.html">Transactions</a>
+      <a href="/allocation.html">Allocation</a>
+      <a href="/performance.html" class="active">Performance</a>
+    </nav>
+  </aside>
+  <main>
+    <h1>Performance</h1>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">Portfolio Value</div>
+        <div class="value" id="tile-value">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">Total Return (TWR)</div>
+        <div class="value" id="tile-twr">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">IRR / MWR</div>
+        <div class="value" id="tile-mwr">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">vs S&amp;P500 (All-time)</div>
+        <div class="value" id="tile-vs-spy">-</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><div class="title">Total Return vs S&amp;P500 (TWR)</div></div>
+      <div class="table-scroll">
+        <table class="period-table" id="period-table">
+          <thead>
+            <tr><th>Benchmark</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th><th>All</th><th>Annualized</th></tr>
+          </thead>
+          <tbody id="period-body">
+            <tr><td colspan="8" class="empty">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" style="padding:0 18px 14px;">
+        คอลัมน์ที่มีข้อมูลไม่ถึงช่วงเวลานั้น (เช่นถือมาไม่ครบ 1 ปี) จะแสดง "-" · Annualized คำนวณจากช่วง "All" ทั้งหมด ถ้าประวัติสั้นตัวเลขนี้จะดูสูง/ต่ำเกินจริงได้
+      </p>
+    </div>
+
+    <div class="card" style="margin-bottom:20px; padding:20px;">
+      <div class="card-header" style="padding:0 0 14px;">
+        <div class="title">Portfolio Value vs "If invested in S&amp;P500"</div>
+        <button class="link-btn" id="toggle-chart-table">แสดงเป็นตาราง</button>
+      </div>
+      <div class="pill-toggle" id="chart-range-toggle" style="margin:14px 0 10px;">
+        <button data-range="1m">1M</button>
+        <button data-range="3m">3M</button>
+        <button data-range="6m">6M</button>
+        <button data-range="ytd">YTD</button>
+        <button data-range="1y">1Y</button>
+        <button data-range="3y">3Y</button>
+        <button data-range="5y">5Y</button>
+        <button data-range="all" class="active">All</button>
+      </div>
+      <div class="chart-legend">
+        <div class="item"><span class="line-key" style="background:#2a78d6"></span> My Portfolio</div>
+        <div class="item"><span class="line-key" style="background:#eb6834"></span> If S&amp;P500</div>
+      </div>
+      <div class="chart-wrap" id="chart-wrap">
+        <svg id="chart-svg" width="100%" height="280" style="display:block; overflow: visible;"></svg>
+        <div class="chart-tooltip" id="chart-tooltip"></div>
+      </div>
+      <div class="table-scroll table-scroll-v" id="chart-table-wrap" style="display:none; margin-top:14px;">
+        <table>
+          <thead><tr><th>Date</th><th>My Portfolio</th><th>If S&amp;P500</th></tr></thead>
+          <tbody id="chart-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="title">Historical Return</div>
+        <div class="pill-toggle" id="granularity-toggle">
+          <button data-g="month" class="active">Monthly</button>
+          <button data-g="quarter">Quarterly</button>
+          <button data-g="year">Annually</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Period</th><th>My Portfolio</th><th>S&amp;P500</th><th>vs S&amp;P500</th></tr></thead>
+          <tbody id="heatmap-body">
+            <tr><td colspan="4" class="empty">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="note">
+      TWR (Time-Weighted Return) วัดผลตอบแทนของการลงทุนล้วนๆ ไม่รวมผลจากจังหวะเติม/ถอนเงิน ส่วน MWR/IRR สะท้อนผลตอบแทนจริงของเงินคุณ รวมจังหวะเข้าออกด้วย
+    </p>
+  </main>
+</div>
+<script src="/js/format.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/holdings.js"></script>
+<script src="/js/prices.js"></script>
+<script src="/js/portfolio.js"></script>
+<script src="/js/currency.js"></script>
+<script src="/js/timeseries.js"></script>
+<script src="/js/performance.js"></script>
+</body>
+</html>

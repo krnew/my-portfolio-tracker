@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home - My Portfolio</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">My Portfolio</div>
+    <nav>
+      <a href="/index.html" class="active">Home</a>
+      <a href="/transactions.html">Transactions</a>
+      <a href="/allocation.html">Allocation</a>
+      <a href="/performance.html">Performance</a>
+    </nav>
+  </aside>
+  <main>
+    <h1>Home</h1>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">Portfolio Value</div>
+        <div class="value" id="tile-value">-</div>
+        <div class="sub" id="tile-value-sub"></div>
+      </div>
+      <div class="tile">
+        <div class="label">Today</div>
+        <div class="value" id="tile-today">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">Unrealized Gain</div>
+        <div class="value" id="tile-unrealized">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">Realized P&amp;L</div>
+        <div class="value" id="tile-realized">-</div>
+      </div>
+    </div>
+
+    <div id="oversold-warning" style="display:none; background:#fdecea; color:var(--red); font-size:13px; padding:12px 16px; border-radius:8px; margin-bottom:16px;"></div>
+    <div id="fx-warning" style="display:none; background:#fdecea; color:var(--red); font-size:13px; padding:12px 16px; border-radius:8px; margin-bottom:16px;"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="title">Holdings Summary</div>
+      </div>
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Shares</th>
+            <th>Avg Cost</th>
+            <th>Last</th>
+            <th>Market Value</th>
+            <th>Unrealized Gain</th>
+            <th>Day Change</th>
+            <th>Realized P&amp;L</th>
+          </tr>
+        </thead>
+        <tbody id="holdings-body">
+          <tr><td colspan="8" class="empty">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <p class="note">
+      ราคาดึงจาก Yahoo Finance ทุก 5 นาที (cache ไว้ที่ data\prices-cache.json) — ตำแหน่งที่ปิดแล้ว (Shares = 0) ไม่ดึงราคา
+    </p>
+  </main>
+</div>
+<script src="/js/format.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/holdings.js"></script>
+<script src="/js/prices.js"></script>
+<script src="/js/portfolio.js"></script>
+<script src="/js/currency.js"></script>
+<script src="/js/home.js"></script>
+</body>
+</html>

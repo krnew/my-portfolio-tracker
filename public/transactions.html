@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transactions - My Portfolio</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="page-transactions">
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">My Portfolio</div>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/transactions.html" class="active">Transactions</a>
+      <a href="/allocation.html">Allocation</a>
+      <a href="/performance.html">Performance</a>
+    </nav>
+  </aside>
+  <main>
+    <h1>Transactions</h1>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="title"><span id="item-count">0</span> items</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="search" placeholder="ค้นหา ticker..." style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+          <input type="file" id="import-file" accept=".csv" style="display:none">
+          <button class="btn btn-ghost" id="btn-import">Import CSV</button>
+          <button class="btn btn-primary" id="btn-add">+ Add Transaction</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Action</th>
+            <th>Ticker</th>
+            <th class="num">Price</th>
+            <th>Currency</th>
+            <th class="num">Shares</th>
+            <th class="num">Commission</th>
+            <th>Note</th>
+            <th class="col-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="tx-body">
+          <tr><td colspan="9" class="empty">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <p class="note">ไฟล์ข้อมูลจริงอยู่ที่ <code>data\transactions.csv</code> — เปิดด้วย Excel ได้โดยตรงเช่นกัน</p>
+  </main>
+</div>
+
+<!-- Add / Edit modal -->
+<div class="overlay" id="tx-overlay">
+  <div class="modal">
+    <h2 id="tx-modal-title">Add Transaction</h2>
+    <div class="error-box" id="tx-error"></div>
+    <form id="tx-form">
+      <input type="hidden" id="f-id">
+
+      <div class="pill-toggle" id="tx-type-toggle" style="margin-bottom:14px;">
+        <button type="button" class="active" data-type="stock" aria-pressed="true">หุ้น / คริปโต</button>
+        <button type="button" data-type="gold" aria-pressed="false">ทองไทย (GOLD-THB)</button>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="f-date">Date</label>
+          <div class="hint" id="f-date-hint">วันที่ทำรายการจริง</div>
+          <input type="date" id="f-date" required aria-describedby="f-date-hint">
+        </div>
+        <div class="field">
+          <label for="f-action">Action</label>
+          <div class="hint" id="f-action-hint">Buy=ซื้อ · Sell=ขาย</div>
+          <select id="f-action" aria-describedby="f-action-hint">
+            <option>Buy</option>
+            <option>Sell</option>
+            <option>Transfer in</option>
+            <option>Transfer out</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ===== หุ้น / คริปโต ===== -->
+      <div id="stock-fields">
+        <div class="field">
+          <label for="f-ticker">Ticker</label>
+          <div class="hint" id="f-ticker-hint">พิมพ์ชื่อย่อหรือชื่อบริษัท แล้วเลือกจากรายการ</div>
+          <input type="text" id="f-ticker" placeholder="GOOGL หรือชื่อบริษัท"
+                 autocomplete="off" spellcheck="false"
+                 role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+                 aria-expanded="false" aria-controls="f-ticker-list" aria-describedby="f-ticker-hint">
+          <div class="suggest-panel" id="f-ticker-list" role="listbox" aria-label="Ticker suggestions"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-price">Price</label>
+            <div class="hint" id="f-price-hint">ราคาต่อ 1 หน่วย ไม่ใช่ยอดรวม</div>
+            <input type="number" id="f-price" step="any" min="0" placeholder="0.00" aria-describedby="f-price-hint">
+            <button type="button" class="link-btn" id="f-price-fetch" style="margin-top:4px;">ดึงราคาปิดของวันที่เลือก</button>
+            <div class="hint" id="f-price-fetched-note" style="display:none;"></div>
+          </div>
+          <div class="field">
+            <label for="f-currency">Currency</label>
+            <div class="hint" id="f-currency-hint">สกุลเงินของราคาที่กรอก</div>
+            <input type="text" id="f-currency" value="USD" aria-describedby="f-currency-hint">
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-shares">Shares</label>
+          <div class="hint" id="f-shares-hint">จำนวนหน่วยที่ซื้อ/ขาย</div>
+          <input type="number" id="f-shares" step="any" min="0" aria-describedby="f-shares-hint">
+        </div>
+        <div class="field">
+          <label for="f-total-paid">ยอดรวมที่จ่าย (ไม่บังคับ)</label>
+          <div class="hint" id="f-total-paid-hint">กรอกแทน Price ได้ ระบบจะหารเป็นราคาต่อหน่วยให้เอง</div>
+          <input type="number" id="f-total-paid" step="any" min="0"
+                 placeholder="เช่น จ่ายรวม 500" aria-describedby="f-total-paid-hint">
+        </div>
+      </div>
+
+      <!-- ===== ทองไทย ===== -->
+      <div id="gold-fields" style="display:none;">
+        <div class="hint" id="gold-live-price" style="margin-bottom:10px;"></div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-gold-grams">จำนวนกรัม</label>
+            <div class="hint">เช่น 0.2</div>
+            <input type="number" id="f-gold-grams" step="any" min="0" placeholder="0.0">
+          </div>
+          <div class="field">
+            <label for="f-gold-total">ยอดรวมที่จ่าย (บาท)</label>
+            <div class="hint">ตัวเลขจากใบเสร็จ/แอป GOLD NOW</div>
+            <input type="number" id="f-gold-total" step="any" min="0" placeholder="0">
+          </div>
+        </div>
+        <div class="hint" id="gold-rate-display">ราคาต่อกรัม: -</div>
+      </div>
+
+      <div class="field" style="margin-top:12px;">
+        <label for="f-commission">Commission</label>
+        <div class="hint" id="f-commission-hint">ค่าธรรมเนียม ไม่มีใส่ 0</div>
+        <input type="number" id="f-commission" step="any" min="0" value="0" aria-describedby="f-commission-hint">
+      </div>
+      <div class="field">
+        <label for="f-note">Note (ไม่บังคับ)</label>
+        <div class="hint" id="f-note-hint">บันทึกช่วยจำ เช่น ซื้อผ่านแอปไหน</div>
+        <input type="text" id="f-note" aria-describedby="f-note-hint">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="tx-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="tx-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="overlay" id="confirm-overlay">
+  <div class="modal">
+    <h2>ลบธุรกรรมนี้?</h2>
+    <p style="font-size:13px; color:var(--text-dim)" id="confirm-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+      <button type="button" class="btn btn-danger" id="confirm-delete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import preview modal -->
+<div class="overlay" id="import-overlay">
+  <div class="modal" style="width:520px;">
+    <h2>Import CSV</h2>
+    <div class="error-box" id="import-error"></div>
+    <p style="font-size:13px; color:var(--text-dim)" id="import-summary"></p>
+    <div class="import-preview">
+      <table>
+        <thead><tr><th>นำเข้า</th><th>Date</th><th>Action</th><th>Ticker</th><th>Price</th><th>Shares</th><th>สถานะ</th></tr></thead>
+        <tbody id="import-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="import-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="import-confirm">Confirm Import</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/format.js"></script>
+<script src="/js/csv.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/ticker-suggest.js"></script>
+<script src="/js/transactions.js"></script>
+</body>
+</html>

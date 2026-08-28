@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Allocation - My Portfolio</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">My Portfolio</div>
+    <nav>
+      <a href="/index.html">Home</a>
+      <a href="/transactions.html">Transactions</a>
+      <a href="/allocation.html" class="active">Allocation</a>
+      <a href="/performance.html">Performance</a>
+    </nav>
+  </aside>
+  <main>
+    <h1>Allocation</h1>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">Portfolio Value</div>
+        <div class="value" id="tile-value">-</div>
+        <div class="sub" id="tile-value-sub"></div>
+      </div>
+      <div class="tile">
+        <div class="label">Holdings</div>
+        <div class="value" id="tile-count">-</div>
+      </div>
+      <div class="tile">
+        <div class="label">Unrealized Gain</div>
+        <div class="value" id="tile-unrealized">-</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <svg id="alloc-donut" viewBox="0 0 400 280" style="display:block; width:100%; max-width:420px; margin:0 auto;"></svg>
+      <div class="alloc-legend" id="alloc-legend"></div>
+    </div>
+    <p class="note" id="alloc-unpriced-note" style="display:none;"></p>
+    <p class="note" id="alloc-fx-warning" style="display:none; color:var(--red);"></p>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header"><div class="title">By Ticker</div></div>
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Allocation</th>
+            <th>Shares</th>
+            <th>Avg Cost</th>
+            <th>Last</th>
+            <th>Market Value</th>
+            <th>Unrealized Gain</th>
+          </tr>
+        </thead>
+        <tbody id="alloc-body">
+          <tr><td colspan="7" class="empty">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <p class="note">
+      แสดงเฉพาะโพซิชันที่ยังถืออยู่ (Shares &gt; 0) — ตำแหน่งที่ปิดแล้วดูได้ที่หน้า Home
+    </p>
+  </main>
+</div>
+<script src="/js/format.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/holdings.js"></script>
+<script src="/js/prices.js"></script>
+<script src="/js/portfolio.js"></script>
+<script src="/js/currency.js"></script>
+<script src="/js/allocation.js"></script>
+</body>
+</html>

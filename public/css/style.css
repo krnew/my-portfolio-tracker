@@ -1,0 +1,302 @@
+:root {
+  --purple: #6c4cf0;
+  --purple-dark: #5a3ddb;
+  --green: #1a9e6b;
+  --red: #e0473f;
+  --border: #e4e4ea;
+  --text: #1f2233;
+  --text-dim: #767a8a;
+  --bg: #f7f7fb;
+  --card: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.layout { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+}
+
+.sidebar .brand {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--purple);
+  padding: 0 20px 20px;
+}
+
+.sidebar nav a {
+  display: block;
+  padding: 10px 20px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  border-left: 3px solid transparent;
+}
+
+.sidebar nav a:hover { background: #f1f0fe; }
+
+.sidebar nav a.active {
+  color: var(--purple);
+  border-left-color: var(--purple);
+  background: #f1f0fe;
+  font-weight: 600;
+}
+
+.sidebar nav a.disabled {
+  color: #c3c5d1;
+  cursor: default;
+  pointer-events: none;
+}
+
+.sidebar nav a.disabled .tag {
+  display: block;
+  font-size: 11px;
+  color: #c3c5d1;
+}
+
+main { flex: 1; padding: 28px 32px; max-width: 1100px; }
+
+h1 { font-size: 22px; margin: 0 0 20px; }
+
+.tiles { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  min-width: 160px;
+}
+
+.tile .label { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.tile .value { font-size: 20px; font-weight: 700; }
+.tile .value.pos { color: var(--green); }
+.tile .value.neg { color: var(--red); }
+.tile .sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border-radius: 0 0 10px 10px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card-header .title { font-weight: 600; font-size: 15px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+
+th { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+
+tbody tr:hover { background: #fafafe; }
+
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+.btn {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary { background: var(--purple); color: #fff; }
+.btn-primary:hover { background: var(--purple-dark); }
+
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-ghost:hover { background: #f1f1f6; }
+
+.btn-danger { background: var(--red); color: #fff; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 4px 6px;
+}
+.icon-btn:hover { color: var(--text); }
+
+.empty { padding: 40px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+.note { font-size: 12px; color: var(--text-dim); margin-top: 10px; }
+
+/* modal */
+.overlay {
+  position: fixed; inset: 0; background: rgba(20, 20, 30, 0.4);
+  display: none; align-items: flex-start; justify-content: center; z-index: 50;
+  overflow-y: auto; padding: 24px 12px;
+}
+.overlay.show { display: flex; }
+
+.modal {
+  background: #fff; border-radius: 10px; padding: 22px; width: 380px; max-width: 92vw;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  margin: auto; /* centers when it fits; align-items:flex-start + overlay's own
+                   scroll lets it scroll into view when the form is taller than
+                   the viewport - never add overflow on .modal itself, that
+                   would clip .suggest-panel's ticker dropdown which is meant
+                   to float outside the modal's box */
+}
+
+.modal h2 { margin: 0 0 16px; font-size: 16px; }
+
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.field .hint { font-size: 11px; line-height: 1.35; color: var(--text-dim); margin: -2px 0 5px; }
+.field input, .field select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+}
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+.error-box {
+  background: #fdecea; color: var(--red); font-size: 12px; padding: 8px 10px; border-radius: 6px; margin-bottom: 12px;
+  display: none;
+}
+.error-box.show { display: block; }
+
+.import-preview { max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; }
+.import-preview table { font-size: 12px; }
+.skip-row { color: var(--text-dim); text-decoration: line-through; }
+
+/* allocation bar */
+.alloc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.alloc-legend .item { display: flex; align-items: center; gap: 7px; }
+.alloc-legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.alloc-legend .pct { color: var(--text-dim); }
+
+/* line chart */
+.chart-wrap { position: relative; }
+.chart-legend { display: flex; gap: 18px; font-size: 13px; margin-bottom: 10px; }
+.chart-legend .item { display: flex; align-items: center; gap: 7px; }
+.chart-legend .line-key { width: 16px; height: 2px; display: inline-block; border-radius: 1px; }
+.chart-tooltip {
+  position: absolute; pointer-events: none; background: #1f2233; color: #fff;
+  font-size: 12px; padding: 8px 10px; border-radius: 6px; display: none;
+  white-space: nowrap; z-index: 10; line-height: 1.6;
+}
+.chart-tooltip .date { color: #b8bacb; font-size: 11px; margin-bottom: 2px; }
+.chart-tooltip .row { display: flex; align-items: center; gap: 6px; }
+.chart-tooltip .row .key { width: 10px; height: 2px; display: inline-block; }
+.chart-tooltip .row .val { font-weight: 700; margin-left: auto; padding-left: 10px; }
+.chart-axis-label { fill: var(--text-dim); font-size: 10px; }
+.chart-gridline { stroke: var(--border); stroke-width: 1; }
+
+.table-scroll-v { max-height: 320px; overflow-y: auto; }
+
+/* pill toggle (MWR/TWR, Monthly/Quarterly/Annually) */
+.pill-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.pill-toggle button {
+  border: none; background: #fff; padding: 6px 12px; font-size: 12px; font-weight: 600;
+  color: var(--text-dim); cursor: pointer;
+}
+.pill-toggle button.active { background: var(--purple); color: #fff; }
+.pill-toggle button + button { border-left: 1px solid var(--border); }
+
+.link-btn { background: none; border: none; color: var(--purple); font-size: 12px; cursor: pointer; padding: 0; }
+.link-btn:hover { text-decoration: underline; }
+
+.period-table td, .period-table th { text-align: right; }
+.period-table td:first-child, .period-table th:first-child { text-align: left; }
+
+/* ---- Transactions page: card fills the window, table scrolls internally,
+   header stays put. Scoped to body.page-transactions so index/allocation/
+   performance (which share .layout/.card/.table-scroll) are untouched. ---- */
+body.page-transactions .layout { height: 100vh; height: 100dvh; }
+body.page-transactions main { display: flex; flex-direction: column; min-height: 0; }
+body.page-transactions main > h1,
+body.page-transactions main > .note { flex: 0 0 auto; }
+body.page-transactions .card { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+body.page-transactions .card-header { flex: 0 0 auto; }
+/* overflow: auto on BOTH axes - y is the new scroll, x stays as a safety net
+   for narrow windows. Never overflow:hidden here (that once hid the
+   edit/delete buttons entirely - see PROGRESS.md bug #1). */
+body.page-transactions .table-scroll { flex: 1; min-height: 120px; overflow: auto; }
+
+/* Sticky header. border-collapse:collapse drops a sticky cell's border in
+   several browsers, so the underline is painted as an inset shadow instead. */
+body.page-transactions thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+/* Note column: clip to one line with an ellipsis, full text via title/hover.
+   The clip lives on an inner span rather than the td itself because
+   table-layout:auto does not honor max-width on a cell directly. */
+body.page-transactions .col-note .clip {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.page-transactions .col-actions { width: 1%; text-align: right; }
+
+/* Numeric columns right-aligned so figures line up under their header. */
+body.page-transactions th.num, body.page-transactions td.num { text-align: right; }
+
+/* ---- ticker typeahead ---- */
+/* .field is only used on this page's modal today (verified), so making it a
+   positioning context globally is safe - see the plan file for the check. */
+.field { position: relative; }
+
+.suggest-panel {
+  position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  max-height: 220px; overflow-y: auto;
+  z-index: 60; /* .overlay is 50 */
+  display: none;
+}
+.suggest-panel.show { display: block; }
+.suggest-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; font-size: 13px; cursor: pointer; }
+.suggest-item.active, .suggest-item:hover { background: #f1f0fe; }
+.suggest-item .sym { font-weight: 700; flex-shrink: 0; }
+.suggest-item .nm { color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.suggest-item .ex { flex-shrink: 0; color: var(--text-dim); font-size: 11px; }
+.suggest-item .owned { flex-shrink: 0; font-size: 10px; color: var(--purple); border: 1px solid var(--purple); border-radius: 4px; padding: 0 4px; }
+.suggest-item mark { background: #fff2a8; color: inherit; padding: 0; }
+.suggest-empty { padding: 10px; font-size: 12px; color: var(--text-dim); }
