@@ -92,3 +92,14 @@ Node.js `http` module ล้วนๆ (static file server + REST API ไม่�
 ราคาดึงจากฝั่ง server ทั้งหมดเพื่อเลี่ยง CORS และไม่ต้องใช้ API key เลย — [Yahoo Finance](https://finance.yahoo.com/) (ราคาหุ้น/คริปโต + ประวัติย้อนหลัง), [frankfurter.dev](https://frankfurter.dev/) (อัตราแลกเปลี่ยน ทั้งปัจจุบันและย้อนหลัง), [thai-gold-api](https://github.com/max180643/thai-gold-api) (ราคาทองคำไทย)
 
 รายละเอียดการพัฒนา บั๊กที่เจอและแก้ไป และข้อจำกัดที่รู้อยู่แล้ว — ดูที่ [PROGRESS.md](PROGRESS.md)
+
+---
+
+## อัปเดต
+
+**30 ส.ค. 2026**
+- **หน้า Performance เลือก benchmark เองได้** — จากเดิมที่ตรึงไว้เป็น S&P500 ตัวเดียว ตอนนี้พิมพ์ ticker หรือชื่อดัชนีอะไรก็ได้ เลือกพร้อมกันได้สูงสุด 4 ตัว และจำตัวเลือกไว้ให้ กราฟ/ตาราง/heatmap ขยายตามจำนวนที่เลือกอัตโนมัติ
+- **หน้า Home มี rail ข่าวหุ้นที่ถือ** — ดึงข่าวจาก Yahoo Finance เฉพาะ ticker ที่ยังถืออยู่ สลับแสดงเท่าๆ กันทุกตัว กรองข่าวที่เก่าเกิน 30 วันออก
+
+**28 ส.ค. 2026**
+- เผยแพร่เวอร์ชันแรกบน GitHub — ครบ 4 หน้า (Transactions / Home / Allocation / Performance) รองรับหุ้น/ETF/คริปโต และทองคำไทยในพอร์ตเดียวกัน แปลงสกุลเงินอัตโนมัติ คำนวณ TWR และ IRR/MWR เอง พร้อม import CSV และ autocomplete ช่อง ticker
