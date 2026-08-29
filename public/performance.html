@@ -34,16 +34,29 @@
         <div class="value" id="tile-mwr">-</div>
       </div>
       <div class="tile">
-        <div class="label">vs S&amp;P500 (All-time)</div>
-        <div class="value" id="tile-vs-spy">-</div>
+        <div class="label"><span id="tile-vs-label">vs Benchmark (All-time)</span></div>
+        <div class="value" id="tile-vs-bench">-</div>
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:20px; padding:16px 20px;">
+      <div class="title" style="margin-bottom:10px;">เทียบกับ</div>
+      <div class="bench-picker" id="bench-chips"></div>
+      <div class="field bench-add" style="margin:10px 0 0;">
+        <input type="text" id="bench-input" placeholder="พิมพ์ ticker หรือชื่อดัชนี เช่น QQQ, nasdaq, ^SET.BK"
+               autocomplete="off" spellcheck="false"
+               role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+               aria-expanded="false" aria-controls="bench-list" aria-label="เพิ่ม benchmark">
+        <div class="suggest-panel" id="bench-list" role="listbox" aria-label="Benchmark suggestions"></div>
+      </div>
+      <p class="note" style="padding:8px 0 0;">เทียบได้สูงสุด 4 ตัวพร้อมกัน ตัวเลือกจะถูกจำไว้สำหรับครั้งถัดไป</p>
+    </div>
+
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-header"><div class="title">Total Return vs S&amp;P500 (TWR)</div></div>
+      <div class="card-header"><div class="title" id="period-table-title">Total Return vs Benchmark (TWR)</div></div>
       <div class="table-scroll">
         <table class="period-table" id="period-table">
-          <thead>
+          <thead id="period-table-head">
             <tr><th>Benchmark</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th><th>All</th><th>Annualized</th></tr>
           </thead>
           <tbody id="period-body">
@@ -58,7 +71,7 @@
 
     <div class="card" style="margin-bottom:20px; padding:20px;">
       <div class="card-header" style="padding:0 0 14px;">
-        <div class="title">Portfolio Value vs "If invested in S&amp;P500"</div>
+        <div class="title" id="chart-title">Portfolio Value vs Benchmark</div>
         <button class="link-btn" id="toggle-chart-table">แสดงเป็นตาราง</button>
       </div>
       <div class="pill-toggle" id="chart-range-toggle" style="margin:14px 0 10px;">
@@ -71,17 +84,14 @@
         <button data-range="5y">5Y</button>
         <button data-range="all" class="active">All</button>
       </div>
-      <div class="chart-legend">
-        <div class="item"><span class="line-key" style="background:#2a78d6"></span> My Portfolio</div>
-        <div class="item"><span class="line-key" style="background:#eb6834"></span> If S&amp;P500</div>
-      </div>
+      <div class="chart-legend" id="chart-legend"></div>
       <div class="chart-wrap" id="chart-wrap">
         <svg id="chart-svg" width="100%" height="280" style="display:block; overflow: visible;"></svg>
         <div class="chart-tooltip" id="chart-tooltip"></div>
       </div>
       <div class="table-scroll table-scroll-v" id="chart-table-wrap" style="display:none; margin-top:14px;">
         <table>
-          <thead><tr><th>Date</th><th>My Portfolio</th><th>If S&amp;P500</th></tr></thead>
+          <thead id="chart-table-head"><tr><th>Date</th><th>My Portfolio</th></tr></thead>
           <tbody id="chart-table-body"></tbody>
         </table>
       </div>
@@ -98,9 +108,9 @@
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Period</th><th>My Portfolio</th><th>S&amp;P500</th><th>vs S&amp;P500</th></tr></thead>
+          <thead id="heatmap-head"><tr><th>Period</th><th>My Portfolio</th></tr></thead>
           <tbody id="heatmap-body">
-            <tr><td colspan="4" class="empty">กำลังโหลด...</td></tr>
+            <tr><td colspan="2" class="empty">กำลังโหลด...</td></tr>
           </tbody>
         </table>
       </div>
@@ -117,6 +127,7 @@
 <script src="/js/portfolio.js"></script>
 <script src="/js/currency.js"></script>
 <script src="/js/timeseries.js"></script>
+<script src="/js/ticker-suggest.js"></script>
 <script src="/js/performance.js"></script>
 </body>
 </html>

@@ -17,6 +17,7 @@ const TickerSuggest = (() => {
   let query = '';
   let debounceTimer = null;
   let seq = 0; // bumped on every keystroke; a response whose seq is stale is dropped
+  let extraSuggestions = []; // caller-supplied pseudo-tickers, merged in alongside SYNTHETIC below
 
   // Wraps the first case-insensitive occurrence of q in <mark>. Each of the
   // three slices is escaped separately so neither the remote payload nor the
@@ -56,7 +57,7 @@ const TickerSuggest = (() => {
   function syntheticMatches(q) {
     const up = q.toUpperCase();
     const lower = q.toLowerCase();
-    return SYNTHETIC
+    return SYNTHETIC.concat(extraSuggestions)
       .filter((s) => s.symbol.includes(up) || s.keywords.some((k) => lower.includes(k) || k.includes(lower)))
       .map((s) => ({ symbol: s.symbol, name: s.name, exchange: s.exchange, owned: false }));
   }
@@ -198,6 +199,7 @@ const TickerSuggest = (() => {
     panel = document.getElementById(inputEl.getAttribute('aria-controls'));
     getLocal = (opts && opts.getLocal) || (() => []);
     onPick = (opts && opts.onPick) || null;
+    extraSuggestions = (opts && opts.extraSuggestions) || [];
 
     input.addEventListener('input', onInput);
     input.addEventListener('keydown', onKeyDown);

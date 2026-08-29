@@ -6,7 +6,7 @@
 <title>Home - My Portfolio</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="page-home">
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">My Portfolio</div>
@@ -43,32 +43,43 @@
     <div id="oversold-warning" style="display:none; background:#fdecea; color:var(--red); font-size:13px; padding:12px 16px; border-radius:8px; margin-bottom:16px;"></div>
     <div id="fx-warning" style="display:none; background:#fdecea; color:var(--red); font-size:13px; padding:12px 16px; border-radius:8px; margin-bottom:16px;"></div>
 
-    <div class="card">
-      <div class="card-header">
-        <div class="title">Holdings Summary</div>
+    <div class="home-grid">
+      <div class="card">
+        <div class="card-header">
+          <div class="title">Holdings Summary</div>
+        </div>
+        <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Shares</th>
+              <th>Avg Cost</th>
+              <th>Last</th>
+              <th>Market Value</th>
+              <th>Unrealized Gain</th>
+              <th>Day Change</th>
+              <th>Realized P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody id="holdings-body">
+            <tr><td colspan="8" class="empty">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+        </div>
       </div>
-      <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Ticker</th>
-            <th>Shares</th>
-            <th>Avg Cost</th>
-            <th>Last</th>
-            <th>Market Value</th>
-            <th>Unrealized Gain</th>
-            <th>Day Change</th>
-            <th>Realized P&amp;L</th>
-          </tr>
-        </thead>
-        <tbody id="holdings-body">
-          <tr><td colspan="8" class="empty">กำลังโหลด...</td></tr>
-        </tbody>
-      </table>
-      </div>
+
+      <aside class="card news-panel">
+        <div class="card-header">
+          <div class="title">ข่าวหุ้นที่ถือ</div>
+        </div>
+        <div id="news-list" class="news-list">
+          <p class="note" style="padding:0;">กำลังโหลด...</p>
+        </div>
+      </aside>
     </div>
     <p class="note">
-      ราคาดึงจาก Yahoo Finance ทุก 5 นาที (cache ไว้ที่ data\prices-cache.json) — ตำแหน่งที่ปิดแล้ว (Shares = 0) ไม่ดึงราคา
+      ราคาดึงจาก Yahoo Finance ทุก 5 นาที (cache ไว้ที่ data\prices-cache.json) — ตำแหน่งที่ปิดแล้ว (Shares = 0) ไม่ดึงราคา · ข่าวดึงจาก Yahoo Finance ตาม ticker ที่ถือ (cache ไว้ 6 ชม.)
     </p>
   </main>
 </div>
@@ -78,6 +89,7 @@
 <script src="/js/prices.js"></script>
 <script src="/js/portfolio.js"></script>
 <script src="/js/currency.js"></script>
+<script src="/js/news.js"></script>
 <script src="/js/home.js"></script>
 </body>
 </html>

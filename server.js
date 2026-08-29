@@ -10,10 +10,12 @@ const DATA_DIR = path.join(ROOT, 'data');
 const CSV_PATH = path.join(DATA_DIR, 'transactions.csv');
 const PRICE_CACHE_PATH = path.join(DATA_DIR, 'prices-cache.json');
 const HISTORY_CACHE_PATH = path.join(DATA_DIR, 'history-cache.json');
+const NEWS_CACHE_PATH = path.join(DATA_DIR, 'news-cache.json');
 
 const PRICE_TTL_MS = 5 * 60 * 1000;
 const FX_TTL_MS = 60 * 60 * 1000;
 const HISTORY_TTL_MS = 12 * 60 * 60 * 1000;
+const NEWS_TTL_MS = 6 * 60 * 60 * 1000; // ข่าวไม่ต้อง realtime - ผู้ใช้ยืนยันแล้วว่า "สิ้นวันเมื่อวานก็พอ"
 const FETCH_TIMEOUT_MS = 8000;
 
 const COLUMNS = ['id', 'date', 'action', 'ticker', 'price', 'currency', 'shares', 'commission', 'note'];
@@ -257,6 +259,87 @@ async function getHistory(cache, freshlyFetched, ticker, startDate) {
     return series;
   } catch (e) {
     if (cached) return cached.series;
+    throw e;
+  }
+}
+
+// ---------- per-ticker news (Yahoo's RSS feed - no API key, no news library) ----------
+function loadNewsCache() {
+  try { return JSON.parse(fs.readFileSync(NEWS_CACHE_PATH, 'utf8')); }
+  catch (e) { return {}; }
+}
+
+function saveNewsCache(cache) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(NEWS_CACHE_PATH, JSON.stringify(cache), 'utf8');
+}
+
+// Handles the entities actually verified in Yahoo's feed (&amp; only, in
+// practice) plus the rest of the standard XML/HTML named + numeric set for
+// safety. A single regex pass over the ORIGINAL string - never chained
+// .replace() calls - so an already-double-encoded "&amp;lt;" decodes to
+// "&lt;" (one layer), never all the way to "<".
+function decodeXmlEntities(s) {
+  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+  return String(s || '').replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (m, body) => {
+    if (body[0] !== '#') return named[body] || m;
+    const code = body[1] === 'x' || body[1] === 'X' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+  });
+}
+
+// Verified live against Yahoo's actual feed: items carry <title>/<link>/
+// <pubDate>/<guid> only - no <source>/<dc:creator>/<author>, so there is no
+// publisher name to surface, only the ticker + timestamp. No CDATA, but
+// titles do carry real entities ("Procter &amp; Gamble") - decoded here so
+// callers only ever need to escape, never decode. Item order in the feed is
+// NOT chronological (verified: pubDates come back as 26,26,27,26,25,28,...
+// within one feed) - sort by publishedAt if order matters to the caller.
+function parseRssItems(xml) {
+  const items = [];
+  const blocks = String(xml || '').split('<item>').slice(1);
+  for (const block of blocks) {
+    const body = block.split('</item>')[0];
+    const title = (body.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
+    const link = (body.match(/<link>([\s\S]*?)<\/link>/) || [])[1];
+    const pubDate = (body.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1];
+    const guid = (body.match(/<guid[^>]*>([\s\S]*?)<\/guid>/) || [])[1];
+    if (!title || !link) continue; // no headline, or nowhere to send the click - skip
+    const parsedDate = pubDate ? new Date(pubDate) : null;
+    items.push({
+      id: decodeXmlEntities((guid || link)).trim(),
+      title: decodeXmlEntities(title).trim(),
+      link: decodeXmlEntities(link).trim(),
+      publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null,
+    });
+  }
+  return items;
+}
+
+async function fetchYahooNews(ticker) {
+  const url = 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=' + encodeURIComponent(ticker) + '&region=US&lang=en-US';
+  const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const xml = await res.text();
+  return parseRssItems(xml).slice(0, 10); // caps cache file size - client-side dedupe/sort/cap happens on top of this
+}
+
+// Same load-once/fetch-many/save-once discipline as getHistory above (see its
+// comment for the measured "5 fetched, 1 persisted" bug this avoids) - cache
+// is the caller's already-loaded snapshot, freshlyFetched collects anything
+// fetched here for the caller to merge under one withCacheLock.
+async function getNews(cache, freshlyFetched, ticker) {
+  const now = Date.now();
+  const cached = cache[ticker];
+  if (cached && now - cached.fetchedAt < NEWS_TTL_MS) {
+    return cached.items;
+  }
+  try {
+    const items = await fetchYahooNews(ticker);
+    freshlyFetched[ticker] = { fetchedAt: now, items };
+    return items;
+  } catch (e) {
+    if (cached) return cached.items;
     throw e;
   }
 }
@@ -608,6 +691,26 @@ const server = http.createServer(async (req, res) => {
           const disk = loadHistoryCache();
           Object.assign(disk, freshHistory);
           saveHistoryCache(disk);
+        });
+      }
+      return sendJson(res, 200, out);
+    }
+
+    if (urlPath === '/api/news' && req.method === 'GET') {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const tickersParam = parsedUrl.searchParams.get('tickers') || '';
+      const tickers = [...new Set(tickersParam.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean))];
+      const newsCache = loadNewsCache();
+      const freshNews = {};
+      const out = {};
+      await Promise.all(tickers.map(async (t) => {
+        try { out[t] = await getNews(newsCache, freshNews, t); } catch (e) { out[t] = { error: e.message || 'fetch failed' }; }
+      }));
+      if (Object.keys(freshNews).length > 0) {
+        await withCacheLock(() => {
+          const disk = loadNewsCache();
+          Object.assign(disk, freshNews);
+          saveNewsCache(disk);
         });
       }
       return sendJson(res, 200, out);
