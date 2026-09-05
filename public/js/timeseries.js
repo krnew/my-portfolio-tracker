@@ -72,14 +72,25 @@ const TimeSeries = (() => {
     return calendar.map((d) => byDate.get(d) || 0);
   }
 
+  function dailyIncome(transactions, calendar) {
+    const byDate = new Map();
+    transactions.forEach((t) => {
+      if ((t.action || '').toLowerCase() !== 'dividend') return;
+      const net = Math.max(0, (Number(t.amount) || 0) - (Number(t.tax) || 0));
+      byDate.set(t.date, (byDate.get(t.date) || 0) + net);
+    });
+    return calendar.map((d) => byDate.get(d) || 0);
+  }
+
   // Modified-Dietz-style daily TWR: strip today's net contribution/withdrawal
   // out of today's ending value before comparing to yesterday's, so a flow's
   // size never leaks into the measured return.
-  function dailyTWR(values, cashFlows) {
+  function dailyTWR(values, cashFlows, incomeFlows) {
     const returns = new Array(values.length).fill(0);
     for (let i = 1; i < values.length; i++) {
       const prev = values[i - 1];
-      returns[i] = prev > 1e-9 ? (values[i] - cashFlows[i]) / prev - 1 : 0;
+      const income = incomeFlows ? (incomeFlows[i] || 0) : 0;
+      returns[i] = prev > 1e-9 ? (values[i] + income - cashFlows[i]) / prev - 1 : 0;
     }
     return returns;
   }
@@ -188,9 +199,128 @@ const TimeSeries = (() => {
     return buckets.map((b) => ({ key: b.key, return: linkReturns(dailyReturns, b.fromIdx, b.toIdx) }));
   }
 
+  // ---------------------------------------------------------------------
+  // สถิติความเสี่ยง - คิดจาก dailyReturns (ผลตอบแทนรายวันแบบ TWR) ไม่ใช่จาก
+  // values โดยตรง เพราะ values จะกระโดดทุกครั้งที่เติมเงิน ซึ่งไม่ใช่การขาดทุน
+  // จริง ถ้าเอา values ไปคิด drawdown ตรง ๆ วันที่ถอนเงินออกจะกลายเป็น "ร่วง"
+  // ทั้งที่พอร์ตไม่ได้เสียหายอะไรเลย
+  // ---------------------------------------------------------------------
+
+  // เส้นมูลค่าสมมติที่เริ่มจาก 1 แล้วเดินตามผลตอบแทนรายวันล้วน ๆ (ไม่มีเงินเข้าออก)
+  function equityCurve(dailyReturns) {
+    let v = 1;
+    return dailyReturns.map((r) => {
+      if (Number.isFinite(r)) v *= (1 + r);
+      return v;
+    });
+  }
+
+  // % ที่ต่ำกว่าจุดสูงสุดเดิม ณ แต่ละวัน (0 = กำลังทำจุดสูงสุดใหม่, -0.2 = ต่ำกว่ายอด 20%)
+  function drawdownSeries(dailyReturns) {
+    const curve = equityCurve(dailyReturns);
+    let peak = -Infinity;
+    return curve.map((v) => {
+      if (v > peak) peak = v;
+      return peak > 0 ? v / peak - 1 : 0;
+    });
+  }
+
+  // จุดที่จมลึกที่สุด + ช่วงที่จมนานที่สุด (นับเป็นวันตามปฏิทิน ไม่ใช่วันทำการ
+  // เพราะสิ่งที่ผู้ใช้อยากรู้คือ "ต้องรอนานแค่ไหน" ไม่ใช่ "ตลาดเปิดกี่วัน")
+  //
+  // ช่วงที่ยังไม่ฟื้นจนถึงวันสุดท้ายก็นับด้วย - ไม่งั้นพอร์ตที่กำลังจมอยู่ตอนนี้
+  // จะรายงาน "จมนานสุด" เป็นครั้งเก่าที่ฟื้นแล้ว ทั้งที่ครั้งปัจจุบันยาวกว่า
+  function drawdownStats(dailyReturns, calendar) {
+    const dd = drawdownSeries(dailyReturns);
+    let maxDD = 0;
+    let maxIdx = -1;
+    dd.forEach((v, i) => { if (v < maxDD) { maxDD = v; maxIdx = i; } });
+
+    let longestDays = 0;
+    let startIdx = null;
+    for (let i = 0; i < dd.length; i++) {
+      if (dd[i] < -1e-9) {
+        if (startIdx === null) startIdx = i;
+      } else if (startIdx !== null) {
+        longestDays = Math.max(longestDays, daysBetween(calendar[startIdx], calendar[i]));
+        startIdx = null;
+      }
+    }
+    if (startIdx !== null) {
+      longestDays = Math.max(longestDays, daysBetween(calendar[startIdx], calendar[calendar.length - 1]));
+    }
+
+    // จุดที่ผลตอบแทนสะสมเคยขึ้นไปสูงสุด - ต้องมาจากเส้นเดียวกับ drawdown เป๊ะ ๆ
+    // ไม่งั้นการ์ดจะขัดกันเอง (เช่นบอกว่ายอดสูงสุดคือวันนี้ แต่ก็บอกว่าตอนนี้
+    // ต่ำกว่ายอด 15% ไปพร้อมกัน) ซึ่งจะเกิดขึ้นถ้าเอายอดเงินจริงมาปนกับตัวเลข
+    // ที่คิดจากผลตอบแทนล้วน
+    const curve = equityCurve(dailyReturns);
+    let peakIdx = 0;
+    curve.forEach((v, i) => { if (v > curve[peakIdx]) peakIdx = i; });
+
+    return {
+      series: dd,
+      current: dd.length ? dd[dd.length - 1] : 0,
+      max: maxDD,
+      maxDate: maxIdx >= 0 ? calendar[maxIdx] : null,
+      peakReturn: curve.length ? curve[peakIdx] - 1 : 0,
+      peakDate: calendar[peakIdx],
+      longestDays,
+      recovered: startIdx === null,
+    };
+  }
+
+  function daysBetween(fromISO, toISO) {
+    return Math.max(0, Math.round(
+      (new Date(toISO + 'T00:00:00Z') - new Date(fromISO + 'T00:00:00Z')) / 86400000,
+    ));
+  }
+
+  // ความผันผวนต่อปี: ส่วนเบี่ยงเบนมาตรฐานของผลตอบแทนรายวัน คูณ sqrt(252)
+  // (252 = จำนวนวันทำการโดยประมาณใน 1 ปี ซึ่งเป็นค่ามาตรฐานของวงการ)
+  //
+  // ข้ามวันแรก (index 0) เสมอ เพราะ dailyTWR กำหนดให้เป็น 0 ตายตัว ไม่ใช่
+  // ผลตอบแทนจริง - ถ้านับรวมจะดึงค่าเฉลี่ยและ SD ให้เพี้ยนลง
+  function volatility(dailyReturns) {
+    const r = dailyReturns.slice(1).filter(Number.isFinite);
+    if (r.length < 2) return null;
+    const mean = r.reduce((s, v) => s + v, 0) / r.length;
+    const variance = r.reduce((s, v) => s + (v - mean) ** 2, 0) / (r.length - 1);
+    return Math.sqrt(variance) * Math.sqrt(252);
+  }
+
+  // Sharpe = (ผลตอบแทนต่อปี - ผลตอบแทนไร้ความเสี่ยง) / ความผันผวนต่อปี
+  // riskFree ปล่อยเป็น 0 ได้ถ้าไม่อยากตั้งสมมติฐาน (ค่าจะสูงกว่าความจริงเล็กน้อย)
+  function sharpe(dailyReturns, riskFree = 0) {
+    const vol = volatility(dailyReturns);
+    if (!vol || vol < 1e-9) return null;
+    const r = dailyReturns.slice(1).filter(Number.isFinite);
+    if (r.length < 2) return null;
+    const mean = r.reduce((s, v) => s + v, 0) / r.length;
+    return (mean * 252 - riskFree) / vol;
+  }
+
+  // Beta = ความแปรปรวนร่วมของพอร์ตกับดัชนี หารด้วยความแปรปรวนของดัชนี
+  function beta(dailyReturns, benchReturns) {
+    const n = Math.min(dailyReturns.length, benchReturns.length);
+    const pairs = [];
+    for (let i = 1; i < n; i++) {
+      if (Number.isFinite(dailyReturns[i]) && Number.isFinite(benchReturns[i])) {
+        pairs.push([dailyReturns[i], benchReturns[i]]);
+      }
+    }
+    if (pairs.length < 2) return null;
+    const meanP = pairs.reduce((s, p) => s + p[0], 0) / pairs.length;
+    const meanB = pairs.reduce((s, p) => s + p[1], 0) / pairs.length;
+    const cov = pairs.reduce((s, p) => s + (p[0] - meanP) * (p[1] - meanB), 0) / (pairs.length - 1);
+    const varB = pairs.reduce((s, p) => s + (p[1] - meanB) ** 2, 0) / (pairs.length - 1);
+    return varB > 1e-12 ? cov / varB : null;
+  }
+
   return {
-    buildCalendar, forwardFill, buildClampedEvents, buildSharesTimeline, dailyCashFlow,
+    buildCalendar, forwardFill, buildClampedEvents, buildSharesTimeline, dailyCashFlow, dailyIncome,
     dailyTWR, dailyPriceReturn, linkReturns, annualize, xirr, simulateBenchmark,
     addMonths, startOfYear, indexFrom, bucketReturns,
+    equityCurve, drawdownSeries, drawdownStats, volatility, sharpe, beta, daysBetween,
   };
 })();

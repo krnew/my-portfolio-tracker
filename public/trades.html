@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>วิเคราะห์การเทรด - My Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">My Portfolio</div>
+    <nav>
+      <a href="/index.html">ภาพรวม</a>
+      <a href="/performance.html">ผลตอบแทน</a>
+      <a href="/allocation.html">สัดส่วนพอร์ต</a>
+      <a href="/dividends.html">เงินปันผล</a>
+      <div class="nav-label">จัดการ</div>
+      <a href="/transactions.html">รายการธุรกรรม</a>
+      <div class="nav-label">เครื่องมือ</div>
+      <a href="/trades.html" class="active">วิเคราะห์การเทรด</a>
+      <a href="/goal.html">เป้าหมาย</a>
+      <a href="/rebalance.html">ปรับสมดุล</a>
+    </nav>
+    <button type="button" class="privacy-toggle" id="privacy-toggle" aria-pressed="false">◌ ซ่อนยอดเงิน</button>
+  </aside>
+  <main>
+    <div class="page-heading">
+      <div>
+        <h1>วิเคราะห์การเทรด</h1>
+        <p class="note">
+          แยกการซื้อทุกครั้งเป็น "ล็อต" ของใครของมันแบบ FIFO
+          <span data-help-slot="fifo"></span>
+          แล้วให้คะแนนทีละไม้ว่าทำได้ดีกว่าการเอาเงินก้อนเดียวกันไปซื้อ
+          <strong id="bench-name">ดัชนี</strong> ในวันเดียวกันหรือเปล่า
+        </p>
+      </div>
+    </div>
+
+    <div id="trade-warning" class="alert" style="display:none;"></div>
+
+    <div class="tiles">
+      <div class="tile">
+        <div class="label">จำนวนล็อต <span data-help-slot="lot"></span></div>
+        <div class="value loading" id="tile-lots"><span class="sr-only">กำลังโหลด</span></div>
+        <div class="sub" id="tile-lots-sub"></div>
+      </div>
+      <div class="tile">
+        <div class="label">อัตราชนะ <span data-help-slot="win-rate"></span></div>
+        <div class="value loading" id="tile-winrate"><span class="sr-only">กำลังโหลด</span></div>
+        <div class="sub" id="tile-winrate-sub"></div>
+      </div>
+      <div class="tile">
+        <div class="label">อัตราชนะเทียบดัชนี <span data-help-slot="win-rate-vs"></span></div>
+        <div class="value loading" id="tile-alpha-winrate"><span class="sr-only">กำลังโหลด</span></div>
+        <div class="sub" id="tile-alpha-winrate-sub"></div>
+      </div>
+      <div class="tile">
+        <div class="label">กำไรรวมจากทุกล็อต</div>
+        <div class="value loading privacy-sensitive" id="tile-trade-gain"><span class="sr-only">กำลังโหลด</span></div>
+        <div class="sub privacy-sensitive" id="tile-trade-gain-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px; padding:20px;">
+      <div class="card-header" style="padding:0 0 12px;">
+        <div class="title" id="flag-title">จังหวะซื้อขายบนเส้นดัชนี</div>
+      </div>
+      <p class="note" style="padding:0 0 10px;">
+        <span class="flag-key" style="background:#2a78d6"></span> วันที่ซื้อ
+        <span class="flag-key" style="background:#eb6834; margin-left:12px;"></span> วันที่ขาย
+        — เอาเมาส์ชี้ที่วงกลมเพื่อดูว่าวันนั้นทำรายการอะไรบ้าง
+      </p>
+      <div id="flag-wrap" class="chart-wrap">
+        <svg id="flag-svg" width="100%" height="260" style="display:block; overflow:visible;"></svg>
+      </div>
+      <p class="note" id="flag-empty" style="display:none; padding:8px 0 0;"></p>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="title">ผลของแต่ละล็อต</div>
+        <span class="note" id="lot-count" style="padding:0;"></span>
+      </div>
+      <div class="filter-bar">
+        <label class="filter-field">
+          <span>สถานะ</span>
+          <select id="filter-status" class="compact-select">
+            <option value="all">ทั้งหมด</option>
+            <option value="holding">ยังถืออยู่</option>
+            <option value="closed">ปิดแล้ว</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>ผลลัพธ์</span>
+          <select id="filter-result" class="compact-select">
+            <option value="all">ทั้งหมด</option>
+            <option value="win">เฉพาะที่กำไร</option>
+            <option value="loss">เฉพาะที่ขาดทุน</option>
+            <option value="beat">เฉพาะที่ชนะดัชนี</option>
+            <option value="lag">เฉพาะที่แพ้ดัชนี</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>สินทรัพย์</span>
+          <select id="filter-ticker" class="compact-select"><option value="">ทุก ticker</option></select>
+        </label>
+        <label class="filter-field">
+          <span>เรียงตาม</span>
+          <select id="filter-sort" class="compact-select">
+            <option value="date">วันที่ซื้อ (ล่าสุดก่อน)</option>
+            <option value="alpha">ชนะดัชนีมากสุด</option>
+            <option value="return">ผลตอบแทนสูงสุด</option>
+            <option value="gain">กำไรเป็นเงินมากสุด</option>
+            <option value="days">ถือมานานสุด</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>สถานะ <span data-help-slot="lot-status"></span></th>
+              <th>วันที่ซื้อ</th>
+              <th class="num">ราคาต่อหน่วย</th>
+              <th class="num">เหลือ / ซื้อมา</th>
+              <th class="num">ต้นทุน <span data-help-slot="cost-basis"></span></th>
+              <th class="num">กำไรรวม</th>
+              <th class="num">ผลตอบแทน <span data-help-slot="total-return-lot"></span></th>
+              <th class="num"><span data-bench-label>ดัชนี</span> ช่วงเดียวกัน</th>
+              <th class="num">ชนะ/แพ้ดัชนี <span data-help-slot="alpha"></span></th>
+              <th class="num">ถือมา (วัน) <span data-help-slot="holding-days"></span></th>
+            </tr>
+          </thead>
+          <tbody id="lot-body" class="privacy-sensitive">
+            <tr><td colspan="11" class="empty">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" style="padding:0 18px 14px;">
+        ราคาต่อหน่วยรวมค่าธรรมเนียมซื้อแล้ว · ล็อตที่ยังถืออยู่ใช้ราคาล่าสุดในการคำนวณ ตัวเลขจึงยังเปลี่ยนได้อีก
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="title">กิจกรรมและค่าธรรมเนียมรายปี</div></div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>ปี</th>
+              <th class="num">ครั้งที่ซื้อ</th>
+              <th class="num">ครั้งที่ขาย</th>
+              <th class="num">มูลค่าซื้อ</th>
+              <th class="num">มูลค่าขาย</th>
+              <th class="num">ค่าธรรมเนียม</th>
+              <th class="num">% ค่าธรรมเนียม <span data-help-slot="fee-ratio"></span></th>
+            </tr>
+          </thead>
+          <tbody id="activity-body" class="privacy-sensitive">
+            <tr><td colspan="7" class="empty">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="data-status">
+      <span class="data-status-text" id="data-status-text">กำลังวิเคราะห์การเทรด…</span>
+      <button type="button" class="link-btn" data-refresh>อัปเดตตอนนี้</button>
+    </div>
+  </main>
+</div>
+<script src="/js/format.js"></script>
+<script src="/js/help.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/prices.js"></script>
+<script src="/js/currency.js"></script>
+<script src="/js/lots.js"></script>
+<script src="/js/trades.js"></script>
+</body>
+</html>

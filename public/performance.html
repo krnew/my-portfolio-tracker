@@ -3,44 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Performance - My Portfolio</title>
+<title>ผลตอบแทน - My Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="page-performance">
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">My Portfolio</div>
     <nav>
-      <a href="/index.html">Home</a>
-      <a href="/transactions.html">Transactions</a>
-      <a href="/allocation.html">Allocation</a>
-      <a href="/performance.html" class="active">Performance</a>
+      <a href="/index.html">ภาพรวม</a>
+      <a href="/performance.html" class="active">ผลตอบแทน</a>
+      <a href="/allocation.html">สัดส่วนพอร์ต</a>
+      <a href="/dividends.html">เงินปันผล</a>
+      <div class="nav-label">จัดการ</div>
+      <a href="/transactions.html">รายการธุรกรรม</a>
+      <div class="nav-label">เครื่องมือ</div>
+      <a href="/trades.html">วิเคราะห์การเทรด</a>
+      <a href="/goal.html">เป้าหมาย</a>
+      <a href="/rebalance.html">ปรับสมดุล</a>
     </nav>
+    <button type="button" class="privacy-toggle" id="privacy-toggle" aria-pressed="false">◌ ซ่อนยอดเงิน</button>
   </aside>
   <main>
-    <h1>Performance</h1>
+    <h1>ผลตอบแทน</h1>
 
     <div class="tiles">
       <div class="tile">
-        <div class="label">Portfolio Value</div>
-        <div class="value" id="tile-value">-</div>
+        <div class="label">มูลค่าพอร์ต</div>
+        <div class="value loading privacy-sensitive" id="tile-value"><span class="sr-only">กำลังโหลด</span></div>
       </div>
       <div class="tile">
-        <div class="label">Total Return (TWR)</div>
-        <div class="value" id="tile-twr">-</div>
+        <div class="label">ผลตอบแทนรวม (TWR) <span data-help-slot="twr"></span></div>
+        <div class="value loading privacy-sensitive" id="tile-twr"><span class="sr-only">กำลังโหลด</span></div>
       </div>
       <div class="tile">
-        <div class="label">IRR / MWR</div>
-        <div class="value" id="tile-mwr">-</div>
+        <div class="label">IRR / MWR <span data-help-slot="mwr"></span></div>
+        <div class="value loading privacy-sensitive" id="tile-mwr"><span class="sr-only">กำลังโหลด</span></div>
       </div>
       <div class="tile">
-        <div class="label"><span id="tile-vs-label">vs Benchmark (All-time)</span></div>
-        <div class="value" id="tile-vs-bench">-</div>
+        <div class="label"><span id="tile-vs-label">เทียบดัชนี (ทั้งหมด)</span> <span data-help-slot="vs-bench"></span></div>
+        <div class="value loading privacy-sensitive" id="tile-vs-bench"><span class="sr-only">กำลังโหลด</span></div>
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><div class="title">เงินก้อนเดียวกันนี้ ถ้าเอาไปทำอย่างอื่น</div></div>
+      <div class="whatif-grid privacy-sensitive">
+        <div class="whatif-cell is-actual">
+          <div class="k">พอร์ตจริงของเรา</div>
+          <div class="v" id="whatif-actual">-</div>
+          <div class="d" id="whatif-actual-sub"></div>
+        </div>
+        <div class="whatif-cell">
+          <div class="k">ถ้าซื้อ <span id="whatif-bench-name">ดัชนี</span> แทน <span data-help-slot="whatif-bench"></span></div>
+          <div class="v" id="whatif-bench">-</div>
+          <div class="d" id="whatif-bench-sub"></div>
+        </div>
+        <div class="whatif-cell">
+          <div class="k">ถ้าไม่ลงทุนเลย <span data-help-slot="whatif-cash"></span></div>
+          <div class="v" id="whatif-cash">-</div>
+          <div class="d" id="whatif-cash-sub"></div>
+        </div>
+      </div>
+      <p class="note" style="padding:12px 18px 14px;">
+        จำลองจากเงินทุกก้อนที่เติมเข้าพอร์ต โดยใช้วันที่เติมจริงเป็นวันซื้อ
+      </p>
+    </div>
+
     <div class="card" style="margin-bottom:20px; padding:16px 20px;">
-      <div class="title" style="margin-bottom:10px;">เทียบกับ</div>
+      <div class="title" style="margin-bottom:10px;">เทียบกับ <span data-help-slot="benchmark"></span></div>
       <div class="bench-picker" id="bench-chips"></div>
       <div class="field bench-add" style="margin:10px 0 0;">
         <input type="text" id="bench-input" placeholder="พิมพ์ ticker หรือชื่อดัชนี เช่น QQQ, nasdaq, ^SET.BK"
@@ -53,28 +87,66 @@
     </div>
 
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-header"><div class="title" id="period-table-title">Total Return vs Benchmark (TWR)</div></div>
+      <div class="card-header"><div class="title" id="period-table-title">ผลตอบแทนรวมเทียบดัชนี (TWR)</div></div>
       <div class="table-scroll">
         <table class="period-table" id="period-table">
           <thead id="period-table-head">
-            <tr><th>Benchmark</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th><th>All</th><th>Annualized</th></tr>
+            <tr><th>ตัวเปรียบเทียบ</th><th>1M</th><th>3M</th><th>6M</th><th>YTD</th><th>1Y</th><th>ทั้งหมด</th><th>เฉลี่ยต่อปี <span data-help-slot="annualized"></span></th></tr>
           </thead>
-          <tbody id="period-body">
+          <tbody id="period-body" class="privacy-sensitive">
             <tr><td colspan="8" class="empty">กำลังโหลด...</td></tr>
           </tbody>
         </table>
       </div>
       <p class="note" style="padding:0 18px 14px;">
-        คอลัมน์ที่มีข้อมูลไม่ถึงช่วงเวลานั้น (เช่นถือมาไม่ครบ 1 ปี) จะแสดง "-" · Annualized คำนวณจากช่วง "All" ทั้งหมด ถ้าประวัติสั้นตัวเลขนี้จะดูสูง/ต่ำเกินจริงได้
+        ช่วงที่มีข้อมูลไม่ครบจะแสดง "-" · ค่าเฉลี่ยต่อปีคำนวณจากข้อมูลทั้งหมด หากประวัติยังสั้นตัวเลขอาจดูสูงหรือต่ำเกินจริง
+      </p>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><div class="title">ความเสี่ยงที่ผ่านมา</div></div>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <div class="k">ผลตอบแทนสูงสุดที่เคยทำได้ <span data-help-slot="ath"></span></div>
+          <div class="v" id="stat-ath">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">ห่างจากจุดสูงสุดตอนนี้ <span data-help-slot="drawdown"></span></div>
+          <div class="v" id="stat-dd-now">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">จมลึกสุด <span data-help-slot="max-drawdown"></span></div>
+          <div class="v" id="stat-dd-max">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">จมนานสุด <span data-help-slot="mdd-duration"></span></div>
+          <div class="v" id="stat-dd-days">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">ความผันผวนต่อปี <span data-help-slot="volatility"></span></div>
+          <div class="v" id="stat-vol">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">Sharpe Ratio <span data-help-slot="sharpe"></span></div>
+          <div class="v" id="stat-sharpe">-</div>
+        </div>
+        <div class="stat-cell">
+          <div class="k">Beta <span data-help-slot="beta"></span></div>
+          <div class="v" id="stat-beta">-</div>
+        </div>
+      </div>
+      <p class="note" style="padding:12px 18px 14px;">
+        ตัวเลขกลุ่ม "จม" คิดจากผลตอบแทนล้วน ๆ ไม่ใช่ยอดเงินในพอร์ต — วันที่เติมเงินเข้าไปจึงไม่ถูกนับเป็นการฟื้นตัว และวันที่ถอนออกก็ไม่ถูกนับว่าขาดทุน
       </p>
     </div>
 
     <div class="card" style="margin-bottom:20px; padding:20px;">
       <div class="card-header" style="padding:0 0 14px;">
-        <div class="title" id="chart-title">Portfolio Value vs Benchmark</div>
+        <div class="title" id="chart-title">มูลค่าพอร์ตเทียบดัชนี</div>
         <button class="link-btn" id="toggle-chart-table">แสดงเป็นตาราง</button>
       </div>
-      <div class="pill-toggle" id="chart-range-toggle" style="margin:14px 0 10px;">
+      <div class="chart-controls">
+      <div class="pill-toggle" id="chart-range-toggle">
         <button data-range="1m">1M</button>
         <button data-range="3m">3M</button>
         <button data-range="6m">6M</button>
@@ -84,14 +156,20 @@
         <button data-range="5y">5Y</button>
         <button data-range="all" class="active">All</button>
       </div>
+      <div class="pill-toggle" id="chart-mode-toggle" aria-label="รูปแบบกราฟ">
+        <button data-mode="value" class="active">มูลค่า</button>
+        <button data-mode="growth">เติบโตจาก 100</button>
+        <button data-mode="drawdown">% ห่างจากจุดสูงสุด</button>
+      </div>
+      </div>
       <div class="chart-legend" id="chart-legend"></div>
-      <div class="chart-wrap" id="chart-wrap">
+      <div class="chart-wrap privacy-sensitive" id="chart-wrap">
         <svg id="chart-svg" width="100%" height="280" style="display:block; overflow: visible;"></svg>
         <div class="chart-tooltip" id="chart-tooltip"></div>
       </div>
-      <div class="table-scroll table-scroll-v" id="chart-table-wrap" style="display:none; margin-top:14px;">
+      <div class="table-scroll table-scroll-v privacy-sensitive" id="chart-table-wrap" style="display:none; margin-top:14px;">
         <table>
-          <thead id="chart-table-head"><tr><th>Date</th><th>My Portfolio</th></tr></thead>
+          <thead id="chart-table-head"><tr><th>วันที่</th><th>พอร์ตของฉัน</th></tr></thead>
           <tbody id="chart-table-body"></tbody>
         </table>
       </div>
@@ -99,28 +177,32 @@
 
     <div class="card">
       <div class="card-header">
-        <div class="title">Historical Return</div>
+        <div class="title">ผลตอบแทนย้อนหลัง</div>
         <div class="pill-toggle" id="granularity-toggle">
-          <button data-g="month" class="active">Monthly</button>
-          <button data-g="quarter">Quarterly</button>
-          <button data-g="year">Annually</button>
+          <button data-g="month" class="active">รายเดือน</button>
+          <button data-g="quarter">รายไตรมาส</button>
+          <button data-g="year">รายปี</button>
         </div>
       </div>
       <div class="table-scroll">
         <table>
-          <thead id="heatmap-head"><tr><th>Period</th><th>My Portfolio</th></tr></thead>
-          <tbody id="heatmap-body">
+          <thead id="heatmap-head"><tr><th>ช่วงเวลา</th><th>พอร์ตของฉัน</th></tr></thead>
+          <tbody id="heatmap-body" class="privacy-sensitive">
             <tr><td colspan="2" class="empty">กำลังโหลด...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
-    <p class="note">
-      TWR (Time-Weighted Return) วัดผลตอบแทนของการลงทุนล้วนๆ ไม่รวมผลจากจังหวะเติม/ถอนเงิน ส่วน MWR/IRR สะท้อนผลตอบแทนจริงของเงินคุณ รวมจังหวะเข้าออกด้วย
-    </p>
+    <p class="note">TWR วัดผลการลงทุนโดยไม่รวมจังหวะเติมหรือถอนเงิน ส่วน MWR/IRR รวมผลของจังหวะเงินเข้าออกด้วย <span data-help-slot="twr-vs-mwr"></span></p>
+    <div class="data-status">
+      <span class="data-status-text" id="data-status-text">กำลังคำนวณผลตอบแทน…</span>
+      <button type="button" class="link-btn" data-refresh>อัปเดตตอนนี้</button>
+    </div>
   </main>
 </div>
 <script src="/js/format.js"></script>
+<script src="/js/help.js"></script>
+<script src="/js/ui.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/holdings.js"></script>
 <script src="/js/prices.js"></script>

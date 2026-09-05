@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Allocation - My Portfolio</title>
+<title>สัดส่วนพอร์ต - My Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,65 +14,107 @@
   <aside class="sidebar">
     <div class="brand">My Portfolio</div>
     <nav>
-      <a href="/index.html">Home</a>
-      <a href="/transactions.html">Transactions</a>
-      <a href="/allocation.html" class="active">Allocation</a>
-      <a href="/performance.html">Performance</a>
+      <a href="/index.html">ภาพรวม</a>
+      <a href="/performance.html">ผลตอบแทน</a>
+      <a href="/allocation.html" class="active">สัดส่วนพอร์ต</a>
+      <a href="/dividends.html">เงินปันผล</a>
+      <div class="nav-label">จัดการ</div>
+      <a href="/transactions.html">รายการธุรกรรม</a>
+      <div class="nav-label">เครื่องมือ</div>
+      <a href="/trades.html">วิเคราะห์การเทรด</a>
+      <a href="/goal.html">เป้าหมาย</a>
+      <a href="/rebalance.html">ปรับสมดุล</a>
     </nav>
+    <button type="button" class="privacy-toggle" id="privacy-toggle" aria-pressed="false">◌ ซ่อนยอดเงิน</button>
   </aside>
   <main>
-    <h1>Allocation</h1>
+    <h1>สัดส่วนพอร์ต</h1>
 
     <div class="tiles">
       <div class="tile">
-        <div class="label">Portfolio Value</div>
-        <div class="value" id="tile-value">-</div>
-        <div class="sub" id="tile-value-sub"></div>
+        <div class="label">มูลค่าพอร์ต</div>
+        <div class="value loading privacy-sensitive" id="tile-value"><span class="sr-only">กำลังโหลด</span></div>
+        <div class="sub privacy-sensitive" id="tile-value-sub"></div>
       </div>
       <div class="tile">
-        <div class="label">Holdings</div>
-        <div class="value" id="tile-count">-</div>
+        <div class="label">สินทรัพย์ที่ถือ</div>
+        <div class="value loading" id="tile-count"><span class="sr-only">กำลังโหลด</span></div>
       </div>
       <div class="tile">
-        <div class="label">Unrealized Gain</div>
-        <div class="value" id="tile-unrealized">-</div>
+        <div class="label">กำไรที่ยังไม่ขาย <span data-help-slot="unrealized"></span></div>
+        <div class="value loading privacy-sensitive" id="tile-unrealized"><span class="sr-only">กำลังโหลด</span></div>
       </div>
     </div>
 
     <div class="card" style="padding:20px;">
-      <svg id="alloc-donut" viewBox="0 0 400 280" style="display:block; width:100%; max-width:420px; margin:0 auto;"></svg>
-      <div class="alloc-legend" id="alloc-legend"></div>
+      <div class="alloc-controls">
+        <div class="group">
+          <span>ดูสัดส่วนตาม <span data-help-slot="alloc-basis"></span></span>
+          <div class="pill-toggle" id="basis-toggle">
+            <button data-basis="value" class="active">มูลค่าตลาด</button>
+            <button data-basis="cost">ต้นทุน</button>
+            <button data-basis="gain">กำไร</button>
+            <button data-basis="loss">ขาดทุน</button>
+          </div>
+        </div>
+        <div class="group">
+          <span>จัดกลุ่มตาม <span data-help-slot="alloc-group"></span></span>
+          <div class="pill-toggle" id="group-toggle">
+            <button data-group="ticker" class="active">รายตัว</button>
+            <button data-group="type">ประเภทสินทรัพย์</button>
+            <button data-group="currency">สกุลเงินที่ซื้อ</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-header" style="padding:0 0 6px;">
+        <div class="title" id="alloc-chart-title">สัดส่วนตามมูลค่าตลาด</div>
+        <span class="note privacy-sensitive" id="alloc-total" style="padding:0;"></span>
+      </div>
+      <div class="privacy-sensitive">
+        <svg id="alloc-donut" viewBox="0 0 400 280" style="display:block; width:100%; max-width:420px; margin:0 auto;"></svg>
+        <div class="alloc-legend" id="alloc-legend"></div>
+      </div>
+      <p class="note" id="alloc-empty-note" style="display:none; padding:8px 0 0;"></p>
     </div>
     <p class="note" id="alloc-unpriced-note" style="display:none;"></p>
-    <p class="note" id="alloc-fx-warning" style="display:none; color:var(--red);"></p>
+    <p class="note" id="alloc-fx-warning" style="display:none; color:var(--loss);"></p>
 
     <div class="card" style="margin-top:20px;">
-      <div class="card-header"><div class="title">By Ticker</div></div>
+      <div class="card-header"><div class="title">แยกตามสินทรัพย์</div></div>
       <div class="table-scroll">
       <table>
         <thead>
           <tr>
             <th>Ticker</th>
-            <th>Allocation</th>
-            <th>Shares</th>
-            <th>Avg Cost</th>
-            <th>Last</th>
-            <th>Market Value</th>
-            <th>Unrealized Gain</th>
+            <th class="num">สัดส่วนตอนนี้ <span data-help-slot="allocation"></span></th>
+            <th class="num">สัดส่วนตอนซื้อ</th>
+            <th class="num">เขยิบไป <span data-help-slot="alloc-basis"></span></th>
+            <th class="num">จำนวน</th>
+            <th class="num">ต้นทุนเฉลี่ย <span data-help-slot="avg-cost"></span></th>
+            <th class="num">ราคาล่าสุด</th>
+            <th class="num">มูลค่าตลาด</th>
+            <th class="num">กำไรที่ยังไม่ขาย <span data-help-slot="unrealized"></span></th>
           </tr>
         </thead>
-        <tbody id="alloc-body">
-          <tr><td colspan="7" class="empty">กำลังโหลด...</td></tr>
+        <tbody id="alloc-body" class="privacy-sensitive">
+          <tr><td colspan="9" class="empty">กำลังโหลด...</td></tr>
         </tbody>
       </table>
       </div>
+      <p class="note" style="padding:0 18px 14px;">
+        "เขยิบไป" คือสัดส่วนตอนนี้ ลบ สัดส่วนตอนที่ลงเงินไป — ค่าบวกมากแปลว่าตัวนั้นวิ่งขึ้นจนกินพอร์ตเกินที่ตั้งใจไว้ ถึงเวลาพิจารณา
+        <a href="/rebalance.html">ปรับสมดุล</a>
+      </p>
     </div>
-    <p class="note">
-      แสดงเฉพาะโพซิชันที่ยังถืออยู่ (Shares &gt; 0) — ตำแหน่งที่ปิดแล้วดูได้ที่หน้า Home
-    </p>
+    <div class="data-status">
+      <span class="data-status-text" id="data-status-text">กำลังอัปเดตราคา…</span>
+      <button type="button" class="link-btn" data-refresh>อัปเดตตอนนี้</button>
+    </div>
   </main>
 </div>
 <script src="/js/format.js"></script>
+<script src="/js/help.js"></script>
+<script src="/js/ui.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/holdings.js"></script>
 <script src="/js/prices.js"></script>

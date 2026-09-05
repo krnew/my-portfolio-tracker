@@ -4,20 +4,16 @@
 // /api/search (Yahoo symbol search, proxied server-side) is merged in after
 // a short debounce. Typing is never blocked and the field always stays a
 // free-text input - suggestions are a convenience, not a constraint.
+//
+// รองรับหลายช่องในหน้าเดียวกัน (เช่น ช่อง Ticker ของฟอร์มซื้อขาย กับช่อง Ticker
+// ของฟอร์มเงินปันผล) - สถานะทุกตัวเก็บแยกต่อ instance ไม่ใช่ตัวแปรกลางของโมดูล
+// ถ้าใช้ตัวแปรกลาง การ attach ช่องที่สองจะไปทับช่องแรกจนช่องแรกใช้ไม่ได้
 const TickerSuggest = (() => {
   const DEBOUNCE_MS = 200;
   const MAX_ITEMS = 10;
 
-  let input = null;
-  let panel = null;
-  let getLocal = () => [];
-  let onPick = null;
-  let items = [];
-  let active = -1;
-  let query = '';
-  let debounceTimer = null;
-  let seq = 0; // bumped on every keystroke; a response whose seq is stale is dropped
-  let extraSuggestions = []; // caller-supplied pseudo-tickers, merged in alongside SYNTHETIC below
+  const instances = [];
+  let uid = 0;
 
   // Wraps the first case-insensitive occurrence of q in <mark>. Each of the
   // three slices is escaped separately so neither the remote payload nor the
@@ -32,11 +28,18 @@ const TickerSuggest = (() => {
       + escapeHtml(s.slice(i + q.length));
   }
 
-  function localMatches(q) {
+  // Pseudo-tickers this app understands but that Yahoo's search can never
+  // find (they aren't real Yahoo symbols) - surfaced locally, same
+  // zero-latency treatment as the user's own ledger tickers.
+  const SYNTHETIC = [
+    { symbol: 'GOLD-THB', name: 'ทองคำแท่งไทย (ราคาสมาคมค้าทองคำ, หน่วยกรัม)', exchange: 'Thai Gold', keywords: ['gold', 'ทอง', 'ทองคำ'] },
+  ];
+
+  function localMatches(st, q) {
     const up = q.toUpperCase();
     const seen = new Set();
     const out = [];
-    for (const raw of getLocal()) {
+    for (const raw of st.getLocal()) {
       const sym = String(raw || '').toUpperCase();
       if (!sym || seen.has(sym)) continue;
       if (up && !sym.includes(up)) continue;
@@ -47,28 +50,12 @@ const TickerSuggest = (() => {
     return out;
   }
 
-  // Pseudo-tickers this app understands but that Yahoo's search can never
-  // find (they aren't real Yahoo symbols) - surfaced locally, same
-  // zero-latency treatment as the user's own ledger tickers.
-  const SYNTHETIC = [
-    { symbol: 'GOLD-THB', name: 'ทองคำแท่งไทย (ราคาสมาคมค้าทองคำ, หน่วยกรัม)', exchange: 'Thai Gold', keywords: ['gold', 'ทอง', 'ทองคำ'] },
-  ];
-
-  function syntheticMatches(q) {
+  function syntheticMatches(st, q) {
     const up = q.toUpperCase();
     const lower = q.toLowerCase();
-    return SYNTHETIC.concat(extraSuggestions)
+    return SYNTHETIC.concat(st.extraSuggestions)
       .filter((s) => s.symbol.includes(up) || s.keywords.some((k) => lower.includes(k) || k.includes(lower)))
       .map((s) => ({ symbol: s.symbol, name: s.name, exchange: s.exchange, owned: false }));
-  }
-
-  // Ledger tickers + synthetic tickers - the two sources that need no network
-  // round trip, so they render on the same frame as the keystroke. `merge`
-  // (below) already dedupes/enriches, so ledger wins if the same symbol
-  // shows up in both (e.g. GOLD-THB already owned gets both the "in your
-  // portfolio" badge AND the synthetic entry's name/exchange).
-  function instantMatches(q) {
-    return merge(localMatches(q), syntheticMatches(q));
   }
 
   // Local (ledger) entries win: if Yahoo also knows that symbol, its name/
@@ -92,66 +79,79 @@ const TickerSuggest = (() => {
     return out;
   }
 
-  function openPanel() {
-    panel.classList.add('show');
-    input.setAttribute('aria-expanded', 'true');
+  // Ledger tickers + synthetic tickers - the two sources that need no network
+  // round trip, so they render on the same frame as the keystroke. `merge`
+  // already dedupes/enriches, so ledger wins if the same symbol shows up in
+  // both (e.g. GOLD-THB already owned gets both the "in your portfolio" badge
+  // AND the synthetic entry's name/exchange).
+  function instantMatches(st, q) {
+    return merge(localMatches(st, q), syntheticMatches(st, q));
   }
 
-  function closePanel() {
-    if (panel) { panel.classList.remove('show'); panel.innerHTML = ''; }
-    if (input) { input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); }
-    items = [];
-    active = -1;
+  function openPanel(st) {
+    st.panel.classList.add('show');
+    st.input.setAttribute('aria-expanded', 'true');
   }
 
-  function syncActive() {
-    const nodes = panel.querySelectorAll('.suggest-item');
+  function closePanel(st) {
+    st.panel.classList.remove('show');
+    st.panel.innerHTML = '';
+    st.input.setAttribute('aria-expanded', 'false');
+    st.input.removeAttribute('aria-activedescendant');
+    st.items = [];
+    st.active = -1;
+  }
+
+  function syncActive(st) {
+    const nodes = st.panel.querySelectorAll('.suggest-item');
     nodes.forEach((n, i) => {
-      const on = i === active;
+      const on = i === st.active;
       n.classList.toggle('active', on);
       n.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    if (active >= 0 && nodes[active]) {
-      input.setAttribute('aria-activedescendant', 'f-ticker-opt-' + active);
-      nodes[active].scrollIntoView({ block: 'nearest' });
+    if (st.active >= 0 && nodes[st.active]) {
+      st.input.setAttribute('aria-activedescendant', st.idPrefix + st.active);
+      nodes[st.active].scrollIntoView({ block: 'nearest' });
     } else {
-      input.removeAttribute('aria-activedescendant');
+      st.input.removeAttribute('aria-activedescendant');
     }
   }
 
-  function render() {
-    if (items.length === 0) { closePanel(); return; }
-    panel.innerHTML = items.map((it, i) => `
-      <div class="suggest-item" role="option" id="f-ticker-opt-${i}" data-idx="${i}" aria-selected="false">
-        <span class="sym">${highlight(it.symbol, query)}</span>
-        ${it.name ? `<span class="nm">${highlight(it.name, query)}</span>` : ''}
+  function render(st) {
+    if (st.items.length === 0) { closePanel(st); return; }
+    // id ของแต่ละตัวเลือกต้องมี prefix ต่อ instance ไม่งั้นสองช่องในหน้าเดียวกัน
+    // จะสร้าง id ซ้ำ และ aria-activedescendant จะชี้ผิดช่อง
+    st.panel.innerHTML = st.items.map((it, i) => `
+      <div class="suggest-item" role="option" id="${st.idPrefix}${i}" data-idx="${i}" aria-selected="false">
+        <span class="sym">${highlight(it.symbol, st.query)}</span>
+        ${it.name ? `<span class="nm">${highlight(it.name, st.query)}</span>` : ''}
         ${it.exchange ? `<span class="ex">${escapeHtml(it.exchange)}</span>` : ''}
         ${it.owned ? '<span class="owned">ในพอร์ต</span>' : ''}
       </div>`).join('');
-    openPanel();
-    syncActive();
+    openPanel(st);
+    syncActive(st);
   }
 
-  function move(delta) {
-    if (items.length === 0) return;
-    active = active < 0
-      ? (delta > 0 ? 0 : items.length - 1)
-      : (active + delta + items.length) % items.length;
-    syncActive();
+  function move(st, delta) {
+    if (st.items.length === 0) return;
+    st.active = st.active < 0
+      ? (delta > 0 ? 0 : st.items.length - 1)
+      : (st.active + delta + st.items.length) % st.items.length;
+    syncActive(st);
   }
 
-  function pick(idx) {
-    const it = items[idx];
+  function pick(st, idx) {
+    const it = st.items[idx];
     if (!it) return;
-    input.value = it.symbol; // both sources already provide uppercase symbols
-    closePanel();
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    if (onPick) onPick(it);
-    input.focus();
+    st.input.value = it.symbol; // both sources already provide uppercase symbols
+    closePanel(st);
+    st.input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (st.onPick) st.onPick(it);
+    st.input.focus();
   }
 
-  async function fetchRemote(q) {
-    const mine = ++seq;
+  async function fetchRemote(st, q) {
+    const mine = ++st.seq;
     let remote = [];
     try {
       const body = await Api.search(q);
@@ -159,67 +159,90 @@ const TickerSuggest = (() => {
     } catch (e) {
       remote = []; // offline / server down: degrade to local-only, silently
     }
-    if (mine !== seq) return; // a newer keystroke has already fired - drop this response
-    items = merge(instantMatches(q), remote);
-    if (active >= items.length) active = items.length - 1;
-    render();
+    if (mine !== st.seq) return; // a newer keystroke has already fired - drop this response
+    st.items = merge(instantMatches(st, q), remote);
+    if (st.active >= st.items.length) st.active = st.items.length - 1;
+    render(st);
   }
 
-  function onInput() {
-    query = input.value.trim();
-    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
-    if (!query) { seq++; closePanel(); return; }
+  function onInput(st) {
+    st.query = st.input.value.trim();
+    if (st.debounceTimer) { clearTimeout(st.debounceTimer); st.debounceTimer = null; }
+    if (!st.query) { st.seq++; closePanel(st); return; }
     // Local ledger + synthetic tickers paint on this very frame - no network in the path.
-    items = instantMatches(query);
-    active = -1;
-    render();
-    debounceTimer = setTimeout(() => fetchRemote(query), DEBOUNCE_MS);
+    st.items = instantMatches(st, st.query);
+    st.active = -1;
+    render(st);
+    st.debounceTimer = setTimeout(() => fetchRemote(st, st.query), DEBOUNCE_MS);
   }
 
-  function onKeyDown(e) {
-    const open = panel.classList.contains('show');
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (open) move(1); else onInput(); return; }
-    if (e.key === 'ArrowUp') { if (open) { e.preventDefault(); move(-1); } return; }
-    if (e.key === 'Escape') { if (open) { e.preventDefault(); e.stopPropagation(); closePanel(); } return; }
+  function onKeyDown(st, e) {
+    const open = st.panel.classList.contains('show');
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (open) move(st, 1); else onInput(st); return; }
+    if (e.key === 'ArrowUp') { if (open) { e.preventDefault(); move(st, -1); } return; }
+    if (e.key === 'Escape') { if (open) { e.preventDefault(); e.stopPropagation(); closePanel(st); } return; }
     if (e.key === 'Enter') {
       // Only swallow Enter when a suggestion is actually highlighted -
       // otherwise Enter must keep submitting the form as it does today.
-      if (open && active >= 0) { e.preventDefault(); pick(active); }
-      else closePanel();
+      if (open && st.active >= 0) { e.preventDefault(); pick(st, st.active); }
+      else closePanel(st);
       return;
     }
     if (e.key === 'Tab') {
-      if (open && active >= 0) pick(active); // accept, then let focus move on normally
-      else closePanel();
+      if (open && st.active >= 0) pick(st, st.active); // accept, then let focus move on normally
+      else closePanel(st);
     }
   }
 
+  // คืน instance ที่ผูกไว้ หรือ null ถ้าผูกไม่ได้ - หน้าเพจที่ไม่มีช่องนั้น หรือ
+  // ช่องที่ลืมใส่ aria-controls ชี้ไปยัง .suggest-panel ต้องไม่ทำให้ทั้งสคริปต์
+  // ของหน้าตายไปด้วย (autocomplete เป็นของอำนวยความสะดวก ไม่ใช่ของจำเป็น)
   function attach(inputEl, opts) {
-    input = inputEl;
-    panel = document.getElementById(inputEl.getAttribute('aria-controls'));
-    getLocal = (opts && opts.getLocal) || (() => []);
-    onPick = (opts && opts.onPick) || null;
-    extraSuggestions = (opts && opts.extraSuggestions) || [];
+    if (!inputEl) return null;
+    const panel = document.getElementById(inputEl.getAttribute('aria-controls') || '');
+    if (!panel) return null;
 
-    input.addEventListener('input', onInput);
-    input.addEventListener('keydown', onKeyDown);
-    input.addEventListener('focus', () => { if (input.value.trim()) onInput(); });
-    input.addEventListener('blur', closePanel);
+    const st = {
+      input: inputEl,
+      panel,
+      getLocal: (opts && opts.getLocal) || (() => []),
+      onPick: (opts && opts.onPick) || null,
+      extraSuggestions: (opts && opts.extraSuggestions) || [],
+      items: [],
+      active: -1,
+      query: '',
+      debounceTimer: null,
+      seq: 0, // bumped on every keystroke; a response whose seq is stale is dropped
+      idPrefix: 'ts' + (++uid) + '-opt-',
+    };
+    instances.push(st);
+
+    inputEl.addEventListener('input', () => onInput(st));
+    inputEl.addEventListener('keydown', (e) => onKeyDown(st, e));
+    inputEl.addEventListener('focus', () => { if (st.input.value.trim()) onInput(st); });
+    inputEl.addEventListener('blur', () => closePanel(st));
 
     // mousedown + preventDefault keeps focus on the input, so `blur` never
     // fires before the click registers - no blur-timeout hack needed.
     panel.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const row = e.target.closest('.suggest-item');
-      if (row) pick(Number(row.dataset.idx));
+      if (row) pick(st, Number(row.dataset.idx));
     });
     panel.addEventListener('mousemove', (e) => {
       const row = e.target.closest('.suggest-item');
       if (!row) return;
       const idx = Number(row.dataset.idx);
-      if (idx !== active) { active = idx; syncActive(); }
+      if (idx !== st.active) { st.active = idx; syncActive(st); }
     });
+
+    return st;
   }
 
-  return { attach, close: closePanel };
+  // ปิดทุกช่องพร้อมกัน - ผู้เรียก (เช่นตอนปิด modal) ไม่ต้องรู้ว่ามีกี่ช่อง
+  function closeAll() {
+    instances.forEach(closePanel);
+  }
+
+  return { attach, close: closeAll };
 })();

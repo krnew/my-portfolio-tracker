@@ -32,6 +32,19 @@ function fmtMoneyShort(n) {
   return sign + '$' + Math.round(Math.abs(n)).toLocaleString();
 }
 
+function fmtChartValue(n) {
+  if (!Number.isFinite(n)) return '-';
+  if (currentChartMode === 'growth') return n.toFixed(2);
+  if (currentChartMode === 'drawdown') return n.toFixed(2) + '%';
+  return fmtMoney(n);
+}
+
+function fmtChartAxis(n) {
+  if (currentChartMode === 'growth') return n.toFixed(0);
+  if (currentChartMode === 'drawdown') return n.toFixed(0) + '%';
+  return fmtMoneyShort(n);
+}
+
 function heatBg(pct) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return '';
   const alpha = Math.min(Math.abs(pct) * 4, 0.35);
@@ -40,7 +53,7 @@ function heatBg(pct) {
 }
 
 function fmtCell(v) {
-  if (v === null || v === undefined) return '<td><span style="color:var(--text-dim)">-</span></td>';
+  if (v === null || v === undefined) return '<td><span style="color:var(--muted)">-</span></td>';
   return `<td><span class="${signClass(v)}">${fmtPct(v * 100)}</span></td>`;
 }
 
@@ -96,6 +109,7 @@ let benchmarkCache = new Map();
 let selected = loadSelected();
 let currentRange = 'all';
 let currentGranularity = 'month';
+let currentChartMode = 'value';
 
 function computeChartGeometry(calendar, series, containerWidth) {
   const width = containerWidth || 800;
@@ -142,7 +156,7 @@ function renderChart(calendar, series) {
     const v = yMin + (i / ticks) * (yMax - yMin);
     const yy = y(v);
     gridSvg += `<line x1="${padding.left}" y1="${yy.toFixed(1)}" x2="${width - padding.right}" y2="${yy.toFixed(1)}" class="chart-gridline" />`;
-    gridSvg += `<text x="${padding.left - 8}" y="${(yy + 3).toFixed(1)}" text-anchor="end" class="chart-axis-label">${fmtMoneyShort(v)}</text>`;
+    gridSvg += `<text x="${padding.left - 8}" y="${(yy + 3).toFixed(1)}" text-anchor="end" class="chart-axis-label">${fmtChartAxis(v)}</text>`;
   }
 
   let xLabelsSvg = '';
@@ -150,7 +164,7 @@ function renderChart(calendar, series) {
   for (let i = 0; i < xTickCount; i++) {
     const idx = Math.round((i / (xTickCount - 1 || 1)) * (n - 1));
     const d = new Date(calendar[idx] + 'T00:00:00Z');
-    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const label = d.toLocaleDateString('th-TH', { month: 'short', day: 'numeric', timeZone: 'UTC' });
     xLabelsSvg += `<text x="${x(idx).toFixed(1)}" y="${height - 6}" text-anchor="middle" class="chart-axis-label">${label}</text>`;
   }
 
@@ -164,7 +178,7 @@ function renderChart(calendar, series) {
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.innerHTML = `${gridSvg}${xLabelsSvg}${pathsSvg}
-    <line id="crosshair" x1="0" y1="${padding.top}" x2="0" y2="${padding.top + plotH}" stroke="#c3c2b7" stroke-width="1" style="display:none" />`;
+    <line id="crosshair" x1="0" y1="${padding.top}" x2="0" y2="${padding.top + plotH}" stroke="#e6dfd8" stroke-width="1" style="display:none" />`; // stroke is --hairline (bare SVG attr, no var() support)
 }
 
 function handleChartMove(clientX) {
@@ -191,7 +205,7 @@ function handleChartMove(clientX) {
   crosshair.style.display = 'block';
 
   const d = new Date(calendar[idx] + 'T00:00:00Z');
-  const dateLabel = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const dateLabel = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
   tooltip.innerHTML = '';
   const dateDiv = document.createElement('div');
@@ -209,7 +223,7 @@ function handleChartMove(clientX) {
     name.textContent = label;
     const value = document.createElement('span');
     value.className = 'val';
-    value.textContent = fmtMoney(values[idx]);
+    value.textContent = fmtChartValue(values[idx]);
     row.appendChild(key);
     row.appendChild(name);
     row.appendChild(value);
@@ -248,10 +262,25 @@ new ResizeObserver(() => {
 
 function renderChartTable(calendar, series) {
   document.getElementById('chart-table-head').innerHTML =
-    '<tr><th>Date</th>' + series.map((s) => `<th>${escapeHtml(s.label)}</th>`).join('') + '</tr>';
+    '<tr><th>วันที่</th>' + series.map((s) => `<th>${escapeHtml(s.label)}</th>`).join('') + '</tr>';
   document.getElementById('chart-table-body').innerHTML = calendar.map((d, i) => `
-    <tr><td>${d}</td>${series.map((s) => `<td>${fmtMoney(s.values[i])}</td>`).join('')}</tr>
+    <tr><td>${d}</td>${series.map((s) => `<td>${fmtChartValue(s.values[i])}</td>`).join('')}</tr>
   `).join('');
+}
+
+function normalizeTo100(values) {
+  const baseIndex = values.findIndex((v) => Number.isFinite(v) && v > 0);
+  if (baseIndex === -1) return values.map(() => null);
+  const base = values[baseIndex];
+  return values.map((v, i) => (i < baseIndex || !Number.isFinite(v) ? null : (v / base) * 100));
+}
+
+function growthIndex(returns) {
+  let value = 100;
+  return returns.map((r) => {
+    if (Number.isFinite(r)) value *= (1 + r);
+    return value;
+  });
 }
 
 // Slices the FULL series down to the requested window and re-renders both
@@ -277,7 +306,22 @@ function applyChartRange(rangeKey) {
   }
   const startIdx = TimeSeries.indexFrom(calendar, since);
   const c = calendar.slice(startIdx);
-  const s = series.map((ser) => ({ ...ser, values: ser.values.slice(startIdx) }));
+  const s = series.map((ser) => {
+    const source = currentChartMode === 'growth' ? ser.growthValues
+      : currentChartMode === 'drawdown' ? ser.drawdownValues
+        : ser.values;
+    const sliced = source.slice(startIdx);
+    // โหมด drawdown ไม่ normalize ซ้ำ - ตั้งใจให้เทียบกับจุดสูงสุด "ตลอดกาล"
+    // เสมอ ไม่ใช่จุดสูงสุดของช่วงที่เลือกดู มิฉะนั้นการซูมเข้าไปดูช่วงสั้น ๆ
+    // จะทำให้ทุกช่วงดูเหมือนเพิ่งฟื้นจากยอดดอยหมด
+    return { ...ser, values: currentChartMode === 'growth' ? normalizeTo100(sliced) : sliced };
+  });
+  const titles = {
+    growth: 'การเติบโตเทียบกัน (เริ่มที่ 100)',
+    drawdown: '% ห่างจากจุดสูงสุดที่เคยทำได้',
+    value: 'มูลค่าพอร์ตเทียบดัชนี',
+  };
+  document.getElementById('chart-title').textContent = titles[currentChartMode] || titles.value;
   renderChart(c, s);
   renderChartTable(c, s);
 }
@@ -313,21 +357,75 @@ function renderPeriodTable(calendar, lastIdx, dailyTWR, benchSeries, daysElapsed
   const portRow = rowFor(dailyTWR);
   const portAnnualized = TimeSeries.annualize(portRow[portRow.length - 1], daysElapsedAll);
 
-  let html = `<tr><td><strong>My Portfolio</strong></td>${portRow.map(fmtCell).join('')}${fmtCell(portAnnualized)}</tr>`;
+  let html = `<tr><td><strong>พอร์ตของฉัน</strong></td>${portRow.map(fmtCell).join('')}${fmtCell(portAnnualized)}</tr>`;
   benchSeries.forEach((b) => {
     const row = rowFor(b.dailyReturn);
     const annualized = TimeSeries.annualize(row[row.length - 1], daysElapsedAll);
     html += `<tr><td>${escapeHtml(b.label)}</td>${row.map(fmtCell).join('')}${fmtCell(annualized)}</tr>`;
-    html += `<tr><td style="color:var(--text-dim)">vs ${escapeHtml(b.label)}</td>${portRow.map((v, i) => fmtCell(v === null || row[i] === null ? null : v - row[i])).join('')}${fmtCell(portAnnualized - annualized)}</tr>`;
+    html += `<tr><td style="color:var(--muted)">เทียบ ${escapeHtml(b.label)}</td>${portRow.map((v, i) => fmtCell(v === null || row[i] === null ? null : v - row[i])).join('')}${fmtCell(portAnnualized - annualized)}</tr>`;
   });
 
   document.getElementById('period-body').innerHTML = html;
 }
 
+// การ์ด "เงินก้อนเดียวกันนี้ ถ้าเอาไปทำอย่างอื่น" - ตัวเลขเดียวที่ตอบคำถาม
+// "เก่งจริง หรือแค่เติมเงินเยอะ" ได้ในบรรทัดเดียว
+function renderWhatIf(primary, benchTicker) {
+  const { values, lastIdx, netContributed } = coreState;
+  const actual = values[lastIdx];
+
+  const setCell = (id, value, subText, subClass) => {
+    document.getElementById(id).textContent = value;
+    const sub = document.getElementById(id + '-sub');
+    sub.textContent = subText || '';
+    sub.className = 'd' + (subClass ? ' ' + subClass : '');
+  };
+
+  setCell('whatif-actual', fmtMoney(actual),
+    netContributed > 1e-9 ? `เติมเงินไปทั้งหมด ${fmtMoney(netContributed)}` : '');
+
+  document.getElementById('whatif-bench-name').textContent = benchTicker || 'ดัชนี';
+  if (primary) {
+    const simulated = primary.simValues[lastIdx];
+    const diff = actual - simulated;
+    setCell('whatif-bench', fmtMoney(simulated),
+      `${diff >= 0 ? 'พอร์ตเราชนะอยู่ ' : 'พอร์ตเราแพ้อยู่ '}${fmtMoney(Math.abs(diff))}`,
+      signClass(diff));
+  } else {
+    setCell('whatif-bench', '-', benchTicker ? 'ยังโหลดข้อมูลดัชนีไม่สำเร็จ' : 'ยังไม่ได้เลือกดัชนี');
+  }
+
+  const gain = actual - netContributed;
+  setCell('whatif-cash', fmtMoney(netContributed),
+    `การลงทุนสร้างส่วนต่างให้ ${fmtMoney(gain)}`, signClass(gain));
+}
+
+function renderRiskStats(primary) {
+  const { drawdown, volatility, sharpe, dailyTWR } = coreState;
+  const set = (id, text, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'v' + (cls ? ' ' + cls : '') + (el.classList.contains('privacy-sensitive') ? ' privacy-sensitive' : '');
+  };
+
+  set('stat-ath', fmtPct(drawdown.peakReturn * 100) + (drawdown.peakDate ? ` · ${drawdown.peakDate}` : ''),
+    signClass(drawdown.peakReturn));
+  set('stat-dd-now', fmtPct(drawdown.current * 100), signClass(drawdown.current));
+  set('stat-dd-max', fmtPct(drawdown.max * 100) + (drawdown.maxDate ? ` · ${drawdown.maxDate}` : ''), signClass(drawdown.max));
+  set('stat-dd-days', drawdown.longestDays > 0
+    ? `${drawdown.longestDays} วัน${drawdown.recovered ? '' : ' (ยังไม่ฟื้น)'}`
+    : 'ยังไม่เคยจม');
+  set('stat-vol', volatility === null ? '-' : fmtPct(volatility * 100).replace('+', ''));
+  set('stat-sharpe', sharpe === null ? '-' : sharpe.toFixed(2), sharpe === null ? '' : signClass(sharpe));
+
+  const betaValue = primary ? TimeSeries.beta(dailyTWR, primary.dailyReturn) : null;
+  set('stat-beta', betaValue === null ? '-' : betaValue.toFixed(2));
+}
+
 function renderHeatmap(calendar, portReturns, benchSeries, granularity) {
   document.getElementById('heatmap-head').innerHTML =
-    '<tr><th>Period</th><th>My Portfolio</th>'
-    + benchSeries.map((b) => `<th>${escapeHtml(b.label)}</th><th>vs ${escapeHtml(b.label)}</th>`).join('')
+    '<tr><th>ช่วงเวลา</th><th>พอร์ตของฉัน</th>'
+    + benchSeries.map((b) => `<th>${escapeHtml(b.label)}</th><th>เทียบ ${escapeHtml(b.label)}</th>`).join('')
     + '</tr>';
 
   const body = document.getElementById('heatmap-body');
@@ -421,22 +519,35 @@ async function computeCore() {
   if (calendar[lastIdx] === todayStr) values[lastIdx] = livePortfolio.totalMarketValue;
 
   const cashFlows = TimeSeries.dailyCashFlow(transactions, calendar);
-  const dailyTWR = TimeSeries.dailyTWR(values, cashFlows);
+  const incomeFlows = TimeSeries.dailyIncome(transactions, calendar);
+  const dailyTWR = TimeSeries.dailyTWR(values, cashFlows, incomeFlows);
   const totalTWR = TimeSeries.linkReturns(dailyTWR, 1, lastIdx);
 
   const xirrCashflows = allTickers
     .flatMap((t) => TimeSeries.buildClampedEvents(transactions, t))
     .filter((e) => e.investorCashFlow !== 0)
     .map((e) => ({ date: e.date, amount: e.investorCashFlow }))
+    .concat(transactions
+      .filter((t) => t.action === 'Dividend')
+      .map((t) => ({ date: t.date, amount: Math.max(0, (Number(t.amount) || 0) - (Number(t.tax) || 0)) })))
     .concat([{ date: todayStr, amount: values[lastIdx] }])
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const mwr = TimeSeries.xirr(xirrCashflows);
 
   const daysElapsedAll = (new Date(calendar[lastIdx] + 'T00:00:00Z') - new Date(calendar[0] + 'T00:00:00Z')) / 86400000;
 
+  const drawdown = TimeSeries.drawdownStats(dailyTWR, calendar);
+
+  // เงินสุทธิที่เติมเข้ามาทั้งหมด = "ถ้าไม่ลงทุนเลยจะมีเท่านี้"
+  const netContributed = cashFlows.reduce((s, v) => s + v, 0);
+
   return {
     empty: false, transactions, allTickers, earliestDate, todayStr,
-    calendar, lastIdx, values, cashFlows, dailyTWR, totalTWR, mwr, daysElapsedAll,
+    calendar, lastIdx, values, cashFlows, incomeFlows, dailyTWR, totalTWR, mwr, daysElapsedAll,
+    drawdown, netContributed,
+    volatility: TimeSeries.volatility(dailyTWR),
+    sharpe: TimeSeries.sharpe(dailyTWR),
+    livePrices: liveData.prices, liveFx: liveData.fx,
   };
 }
 
@@ -527,13 +638,15 @@ function renderAll() {
   if (!coreState || coreState.empty) return;
   const { calendar, lastIdx, values, dailyTWR, totalTWR, mwr, todayStr, daysElapsedAll } = coreState;
 
-  document.getElementById('tile-value').textContent = fmtMoney(values[lastIdx]);
+  const valueTile = document.getElementById('tile-value');
+  valueTile.textContent = fmtMoney(values[lastIdx]);
+  valueTile.className = 'value privacy-sensitive';
   const twrTile = document.getElementById('tile-twr');
   twrTile.textContent = fmtPct(totalTWR * 100);
-  twrTile.className = 'value ' + signClass(totalTWR);
+  twrTile.className = 'value privacy-sensitive ' + signClass(totalTWR);
   const mwrTile = document.getElementById('tile-mwr');
   mwrTile.textContent = fmtPct(mwr * 100);
-  mwrTile.className = 'value ' + signClass(mwr);
+  mwrTile.className = 'value privacy-sensitive ' + signClass(mwr);
 
   // Only benchmarks that finished loading WITHOUT error feed the chart/tables
   // below - a failed ticker stays visible as an error chip (renderChips) but
@@ -555,27 +668,40 @@ function renderAll() {
   const vsLabel = document.getElementById('tile-vs-label');
   const vsTile = document.getElementById('tile-vs-bench');
   if (selected.length === 0) {
-    vsLabel.textContent = 'vs Benchmark (All-time)';
+    vsLabel.textContent = 'เทียบดัชนี (ทั้งหมด)';
     vsTile.textContent = '-';
-    vsTile.className = 'value';
+    vsTile.className = 'value privacy-sensitive';
   } else {
     const primary = benchmarkCache.get(selected[0]);
-    vsLabel.textContent = 'vs ' + selected[0] + ' (All-time)';
+    vsLabel.textContent = 'เทียบ ' + selected[0] + ' (ทั้งหมด)';
     if (primary && primary.status === 'ready') {
       const totalBench = TimeSeries.linkReturns(primary.dailyReturn, 1, lastIdx);
       const vs = totalTWR - totalBench;
       vsTile.textContent = fmtPct(vs * 100);
-      vsTile.className = 'value ' + signClass(vs);
+      vsTile.className = 'value privacy-sensitive ' + signClass(vs);
     } else {
       vsTile.textContent = primary && primary.status === 'error' ? 'N/A' : '...';
-      vsTile.className = 'value';
+      vsTile.className = 'value privacy-sensitive';
     }
   }
 
   renderPeriodTable(calendar, lastIdx, dailyTWR, benchSeries, daysElapsedAll, todayStr);
+  // การ์ด "ถ้าเอาเงินไปทำอย่างอื่น" กับ Beta ผูกกับ benchmark ตัวแรกเท่านั้น
+  // (มีช่องเดียว) - และต้องเป็นตัวที่โหลดสำเร็จจริง ไม่ใช่ตัวที่ยังโหลดอยู่หรือพัง
+  const primaryEntry = selected[0] ? benchmarkCache.get(selected[0]) : null;
+  const primaryReady = primaryEntry && primaryEntry.status === 'ready' ? primaryEntry : null;
+  renderWhatIf(primaryReady, selected[0] || null);
+  renderRiskStats(primaryReady);
 
-  const chartSeries = [{ key: '__portfolio', label: 'My Portfolio', color: PORTFOLIO_COLOR, values }]
-    .concat(benchSeries.map((b) => ({ key: b.key, label: b.label, color: b.color, values: b.values })));
+  const toPct = (series) => series.map((v) => v * 100);
+  const chartSeries = [{
+    key: '__portfolio', label: 'พอร์ตของฉัน', color: PORTFOLIO_COLOR,
+    values, growthValues: growthIndex(dailyTWR), drawdownValues: toPct(coreState.drawdown.series),
+  }].concat(benchSeries.map((b) => ({
+    key: b.key, label: b.label, color: b.color,
+    values: b.values, growthValues: growthIndex(b.dailyReturn),
+    drawdownValues: toPct(TimeSeries.drawdownSeries(b.dailyReturn)),
+  })));
   fullChartData = { calendar, series: chartSeries };
   renderLegend(chartSeries);
   applyChartRange(currentRange);
@@ -632,6 +758,15 @@ document.querySelectorAll('#chart-range-toggle button').forEach((btn) => {
   });
 });
 
+document.querySelectorAll('#chart-mode-toggle button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#chart-mode-toggle button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentChartMode = btn.dataset.mode;
+    applyChartRange(currentRange);
+  });
+});
+
 document.querySelectorAll('#granularity-toggle button').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#granularity-toggle button').forEach((b) => b.classList.remove('active'));
@@ -659,14 +794,18 @@ async function init() {
   } catch (e) {
     periodBody.innerHTML = '<tr><td colspan="8" class="empty">โหลดข้อมูลไม่สำเร็จ: ' + escapeHtml(e.message) + '</td></tr>';
     heatmapBody.innerHTML = '<tr><td colspan="2" class="empty">-</td></tr>';
+    AppUI.setDataStatus('คำนวณผลตอบแทนไม่สำเร็จ', 'error');
     return;
   }
 
   if (coreState.empty) {
     periodBody.innerHTML = '<tr><td colspan="8" class="empty">ยังไม่มีธุรกรรม</td></tr>';
     heatmapBody.innerHTML = '<tr><td colspan="2" class="empty">ยังไม่มีธุรกรรม</td></tr>';
+    AppUI.setDataStatus('ยังไม่มีธุรกรรมสำหรับคำนวณ', 'ready');
     return;
   }
+
+  AppUI.updatePriceStatus(coreState.livePrices, coreState.liveFx);
 
   setupBenchmarkPicker();
   await setBenchmarks(selected);
