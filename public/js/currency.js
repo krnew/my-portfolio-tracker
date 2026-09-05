@@ -63,6 +63,8 @@ const Currency = (() => {
         ...t,
         price: t.price / rate,
         commission: t.commission / rate,
+        amount: (Number(t.amount) || 0) / rate,
+        tax: (Number(t.tax) || 0) / rate,
         origCurrency: t.currency,
         currency: 'USD',
         fxRate: rate,

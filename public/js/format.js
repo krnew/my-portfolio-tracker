@@ -35,7 +35,8 @@ function todayLocalISO() {
 
 function setTile(valueId, subId, value, sub, cls) {
   const valueEl = document.getElementById(valueId);
+  const privacyClass = valueEl.classList.contains('privacy-sensitive') ? ' privacy-sensitive' : '';
   valueEl.textContent = value;
-  valueEl.className = 'value' + (cls ? ' ' + cls : '');
+  valueEl.className = 'value' + (cls ? ' ' + cls : '') + privacyClass;
   if (subId) document.getElementById(subId).textContent = sub || '';
 }

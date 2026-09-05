@@ -8,6 +8,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
 const CSV_PATH = path.join(DATA_DIR, 'transactions.csv');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const PRICE_CACHE_PATH = path.join(DATA_DIR, 'prices-cache.json');
 const HISTORY_CACHE_PATH = path.join(DATA_DIR, 'history-cache.json');
 const NEWS_CACHE_PATH = path.join(DATA_DIR, 'news-cache.json');
@@ -18,8 +19,8 @@ const HISTORY_TTL_MS = 12 * 60 * 60 * 1000;
 const NEWS_TTL_MS = 6 * 60 * 60 * 1000; // ข่าวไม่ต้อง realtime - ผู้ใช้ยืนยันแล้วว่า "สิ้นวันเมื่อวานก็พอ"
 const FETCH_TIMEOUT_MS = 8000;
 
-const COLUMNS = ['id', 'date', 'action', 'ticker', 'price', 'currency', 'shares', 'commission', 'note'];
-const VALID_ACTIONS = ['Buy', 'Sell', 'Transfer in', 'Transfer out'];
+const COLUMNS = ['id', 'date', 'action', 'ticker', 'price', 'currency', 'shares', 'commission', 'amount', 'tax', 'note'];
+const VALID_ACTIONS = ['Buy', 'Sell', 'Transfer in', 'Transfer out', 'Dividend'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Local calendar date, NOT UTC - toISOString() runs a day behind local time
@@ -87,6 +88,8 @@ function normalizeRow(obj) {
     currency: obj.currency || 'USD',
     shares: obj.shares === '' || obj.shares === undefined ? 0 : Number(obj.shares),
     commission: obj.commission === '' || obj.commission === undefined ? 0 : Number(obj.commission),
+    amount: obj.amount === '' || obj.amount === undefined ? 0 : Number(obj.amount),
+    tax: obj.tax === '' || obj.tax === undefined ? 0 : Number(obj.tax),
     note: obj.note || '',
   };
 }
@@ -106,6 +109,16 @@ function loadTransactions() {
 
 function saveTransactions(rows) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (fs.existsSync(CSV_PATH)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(CSV_PATH, path.join(BACKUP_DIR, `transactions-${stamp}.csv`));
+    const backups = fs.readdirSync(BACKUP_DIR)
+      .filter((name) => /^transactions-.*\.csv$/.test(name))
+      .sort()
+      .reverse();
+    backups.slice(30).forEach((name) => fs.unlinkSync(path.join(BACKUP_DIR, name)));
+  }
   fs.writeFileSync(CSV_PATH, rowsToCsv(rows), 'utf8');
 }
 
@@ -161,11 +174,17 @@ async function fetchYahooPrice(ticker) {
     price: meta.regularMarketPrice,
     prevClose: typeof meta.chartPreviousClose === 'number' ? meta.chartPreviousClose : meta.regularMarketPrice,
     currency: meta.currency || 'USD',
+    // EQUITY / ETF / CRYPTOCURRENCY / INDEX / MUTUALFUND - ใช้จัดกลุ่มในหน้า
+    // สัดส่วนพอร์ต มากับ response เดิมอยู่แล้ว ไม่ต้องยิง API เพิ่ม
+    // (cache เก่าที่บันทึกก่อนมีฟิลด์นี้จะไม่มีค่า ฝั่ง client จึงเดาจากรูปแบบ
+    // ticker เป็นทางสำรองไว้)
+    type: meta.instrumentType || '',
+    name: meta.longName || meta.shortName || '',
     asOf: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : new Date().toISOString(),
   };
 }
 
-async function getPrices(tickers) {
+async function getPrices(tickers, forceRefresh = false) {
   const cache = loadPriceCache();
   const now = Date.now();
   const result = {};
@@ -173,7 +192,7 @@ async function getPrices(tickers) {
 
   await Promise.all(tickers.map(async (ticker) => {
     const cached = cache.prices[ticker];
-    if (cached && now - cached.fetchedAt < PRICE_TTL_MS) {
+    if (!forceRefresh && cached && now - cached.fetchedAt < PRICE_TTL_MS) {
       result[ticker] = { ...cached, stale: false };
       return;
     }
@@ -328,10 +347,10 @@ async function fetchYahooNews(ticker) {
 // comment for the measured "5 fetched, 1 persisted" bug this avoids) - cache
 // is the caller's already-loaded snapshot, freshlyFetched collects anything
 // fetched here for the caller to merge under one withCacheLock.
-async function getNews(cache, freshlyFetched, ticker) {
+async function getNews(cache, freshlyFetched, ticker, forceRefresh = false) {
   const now = Date.now();
   const cached = cache[ticker];
-  if (cached && now - cached.fetchedAt < NEWS_TTL_MS) {
+  if (!forceRefresh && cached && now - cached.fetchedAt < NEWS_TTL_MS) {
     return cached.items;
   }
   try {
@@ -551,6 +570,8 @@ function validateInput(body) {
   const price = Number(body.price);
   const shares = Number(body.shares);
   const commission = body.commission === undefined || body.commission === '' ? 0 : Number(body.commission);
+  const amount = body.amount === undefined || body.amount === '' ? 0 : Number(body.amount);
+  const tax = body.tax === undefined || body.tax === '' ? 0 : Number(body.tax);
   const currency = String(body.currency || 'USD').trim() || 'USD';
   const note = String(body.note || '').trim();
 
@@ -559,15 +580,19 @@ function validateInput(body) {
   else if (date > todayLocalISO()) errors.push('date cannot be in the future');
   if (!VALID_ACTIONS.includes(action)) errors.push('action must be one of: ' + VALID_ACTIONS.join(', '));
   if (!ticker) errors.push('ticker is required');
-  if (!Number.isFinite(shares) || shares <= 0) errors.push('shares must be a positive number');
+  if (action === 'Dividend') {
+    if (!Number.isFinite(amount) || amount <= 0) errors.push('amount must be a positive number for Dividend');
+  } else if (!Number.isFinite(shares) || shares <= 0) errors.push('shares must be a positive number');
   if (!Number.isFinite(price) || price < 0) errors.push('price must be a non-negative number');
   // Buy/Sell with price=0 silently zeroes out cost basis (unrealized gain
   // then shows the full market value as "profit"). Transfer in/out are
   // still allowed to have no price - a transfer isn't a purchase.
   else if ((action === 'Buy' || action === 'Sell') && price === 0) errors.push('price is required for Buy/Sell');
   if (!Number.isFinite(commission) || commission < 0) errors.push('commission must be a non-negative number');
+  if (!Number.isFinite(tax) || tax < 0) errors.push('tax must be a non-negative number');
+  if (action === 'Dividend' && tax > amount) errors.push('tax cannot exceed dividend amount');
 
-  return { errors, value: { date, action, ticker: ticker.toUpperCase(), price, currency, shares, commission, note } };
+  return { errors, value: { date, action, ticker: ticker.toUpperCase(), price, currency, shares, commission, amount, tax, note } };
 }
 
 // ---------- HTTP plumbing ----------
@@ -614,6 +639,16 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath === '/api/transactions' && req.method === 'GET') {
       return sendJson(res, 200, loadTransactions());
+    }
+
+    if (urlPath === '/api/transactions/export' && req.method === 'GET') {
+      const filename = `portfolio-transactions-${todayLocalISO()}.csv`;
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
+      });
+      return res.end('\uFEFF' + rowsToCsv(loadTransactions()));
     }
 
     if (urlPath === '/api/transactions' && req.method === 'POST') {
@@ -670,7 +705,8 @@ const server = http.createServer(async (req, res) => {
       const parsedUrl = new URL(req.url, 'http://localhost');
       const tickersParam = parsedUrl.searchParams.get('tickers') || '';
       const tickers = [...new Set(tickersParam.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean))];
-      const prices = tickers.length ? await getPrices(tickers) : {};
+      const forceRefresh = parsedUrl.searchParams.has('refresh');
+      const prices = tickers.length ? await getPrices(tickers, forceRefresh) : {};
       const fx = await getFxRate('USD', 'THB');
       return sendJson(res, 200, { prices, fx });
     }
@@ -700,11 +736,12 @@ const server = http.createServer(async (req, res) => {
       const parsedUrl = new URL(req.url, 'http://localhost');
       const tickersParam = parsedUrl.searchParams.get('tickers') || '';
       const tickers = [...new Set(tickersParam.split(',').map((t) => t.trim().toUpperCase()).filter(Boolean))];
+      const forceRefresh = parsedUrl.searchParams.has('refresh');
       const newsCache = loadNewsCache();
       const freshNews = {};
       const out = {};
       await Promise.all(tickers.map(async (t) => {
-        try { out[t] = await getNews(newsCache, freshNews, t); } catch (e) { out[t] = { error: e.message || 'fetch failed' }; }
+        try { out[t] = await getNews(newsCache, freshNews, t, forceRefresh); } catch (e) { out[t] = { error: e.message || 'fetch failed' }; }
       }));
       if (Object.keys(freshNews).length > 0) {
         await withCacheLock(() => {

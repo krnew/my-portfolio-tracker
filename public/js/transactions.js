@@ -5,6 +5,13 @@ let importPreviewRows = [];
 const txBody = document.getElementById('tx-body');
 const itemCount = document.getElementById('item-count');
 const searchInput = document.getElementById('search');
+const ACTION_LABELS = {
+  Buy: 'ซื้อ',
+  Sell: 'ขาย',
+  'Transfer in': 'โอนเข้า',
+  'Transfer out': 'โอนออก',
+  Dividend: 'เงินปันผล',
+};
 
 function fmtNum(n, digits) {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -27,16 +34,16 @@ function renderTable() {
   txBody.innerHTML = rows.map((t) => `
     <tr data-id="${t.id}">
       <td>${escapeHtml(t.date)}</td>
-      <td>${escapeHtml(t.action)}</td>
+      <td>${escapeHtml(ACTION_LABELS[t.action] || t.action)}</td>
       <td><strong>${escapeHtml(t.ticker)}</strong></td>
-      <td class="num">${fmtNum(t.price, 2)}</td>
+      <td class="num">${t.action === 'Dividend' ? fmtNum(t.amount, 2) : fmtNum(t.price, 2)}</td>
       <td>${escapeHtml(t.currency)}</td>
       <td class="num">${fmtNum(t.shares, 4)}</td>
-      <td class="num">${fmtNum(t.commission, 2)}</td>
+      <td class="num">${t.action === 'Dividend' ? fmtNum(t.tax, 2) : fmtNum(t.commission, 2)}</td>
       <td class="col-note"><span class="clip" title="${escapeHtml(t.note)}">${escapeHtml(t.note)}</span></td>
       <td class="col-actions">
-        <button class="icon-btn btn-edit" title="Edit">✏️</button>
-        <button class="icon-btn btn-delete" title="Delete">🗑️</button>
+        <button class="icon-btn btn-edit" title="แก้ไข" aria-label="แก้ไข ${escapeHtml(t.ticker)} วันที่ ${escapeHtml(t.date)}">✏️</button>
+        <button class="icon-btn btn-delete" title="ลบ" aria-label="ลบ ${escapeHtml(t.ticker)} วันที่ ${escapeHtml(t.date)}">🗑️</button>
       </td>
     </tr>
   `).join('');
@@ -75,6 +82,7 @@ const priceFetchBtn = document.getElementById('f-price-fetch');
 const priceFetchedNote = document.getElementById('f-price-fetched-note');
 const stockFields = document.getElementById('stock-fields');
 const goldFields = document.getElementById('gold-fields');
+const dividendFields = document.getElementById('dividend-fields');
 const goldGramsInput = document.getElementById('f-gold-grams');
 const goldTotalInput = document.getElementById('f-gold-total');
 const goldRateDisplay = document.getElementById('gold-rate-display');
@@ -112,18 +120,25 @@ function setTxType(type) {
   });
   stockFields.style.display = type === 'stock' ? 'block' : 'none';
   goldFields.style.display = type === 'gold' ? 'block' : 'none';
+  dividendFields.style.display = type === 'dividend' ? 'block' : 'none';
 
   if (type === 'gold') {
+    if (document.getElementById('f-action').value === 'Dividend') document.getElementById('f-action').value = 'Buy';
     document.getElementById('f-ticker').value = 'GOLD-THB';
     document.getElementById('f-currency').value = 'THB';
     recomputeGoldPrice(); // sync f-shares/f-price from whatever's already in the gold inputs
     loadGoldReferencePrice();
-  } else if (document.getElementById('f-ticker').value === 'GOLD-THB') {
+  } else if (type === 'dividend') {
+    document.getElementById('f-action').value = 'Dividend';
+  } else {
+    if (document.getElementById('f-action').value === 'Dividend') document.getElementById('f-action').value = 'Buy';
+    if (document.getElementById('f-ticker').value === 'GOLD-THB') {
     // สลับกลับมาโหมดหุ้น: เคลียร์ ticker/currency ที่ตั้งไว้ตอนโหมดทอง ไม่ให้ค้าง
     document.getElementById('f-ticker').value = '';
     document.getElementById('f-currency').value = 'USD';
     priceInput.value = '';
     sharesInput.value = '';
+    }
   }
 }
 document.querySelectorAll('#tx-type-toggle button').forEach((btn) => {
@@ -154,6 +169,7 @@ TickerSuggest.attach(document.getElementById('f-ticker'), {
   // -> สลับไปแท็บทองให้เองเลย ครบทั้ง currency และช่องกรอกที่เหมาะสมกว่า
   onPick: (item) => { if (item.symbol === 'GOLD-THB') setTxType('gold'); },
 });
+TickerSuggest.attach(document.getElementById('f-div-ticker'), { getLocal: () => allTx.map((t) => t.ticker) });
 
 // ---------- โหมดหุ้น: "ยอดรวมที่จ่าย" -> คำนวณ Price ให้อัตโนมัติ (scratch, ไม่ส่งไป server) ----------
 function recomputePriceFromTotal() {
@@ -222,11 +238,16 @@ function openAddModal() {
   TickerSuggest.close();
   txForm.reset();
   document.getElementById('f-id').value = '';
+  document.getElementById('f-date').value = todayLocalISO();
   document.getElementById('f-currency').value = 'USD';
   document.getElementById('f-commission').value = '0';
+  document.getElementById('f-div-ticker').value = '';
+  document.getElementById('f-div-amount').value = '';
+  document.getElementById('f-div-tax').value = '0';
+  document.getElementById('f-div-currency').value = 'USD';
   goldGramsInput.value = '';
   goldTotalInput.value = '';
-  document.getElementById('tx-modal-title').textContent = 'Add Transaction';
+  document.getElementById('tx-modal-title').textContent = 'เพิ่มรายการ';
   hideError(txError);
   hideFetchNote();
   setTxType('stock'); // เปิดใหม่เริ่มที่โหมดหุ้นเสมอ
@@ -245,7 +266,13 @@ function openEditModal(tx) {
   hideError(txError);
   hideFetchNote();
 
-  if (tx.ticker === 'GOLD-THB') {
+  if (tx.action === 'Dividend') {
+    document.getElementById('f-div-ticker').value = tx.ticker;
+    document.getElementById('f-div-amount').value = tx.amount;
+    document.getElementById('f-div-tax').value = tx.tax;
+    document.getElementById('f-div-currency').value = tx.currency;
+    setTxType('dividend');
+  } else if (tx.ticker === 'GOLD-THB') {
     goldGramsInput.value = tx.shares;
     goldTotalInput.value = (Number(tx.price) * Number(tx.shares)).toFixed(2); // ย้อนคำนวณยอดรวมจาก price/shares ที่เก็บไว้
     setTxType('gold'); // จะ sync f-shares/f-price ให้เองจากค่าที่เพิ่งตั้ง
@@ -258,7 +285,7 @@ function openEditModal(tx) {
     document.getElementById('f-shares').value = tx.shares;
     setTxType('stock');
   }
-  document.getElementById('tx-modal-title').textContent = 'Edit Transaction';
+  document.getElementById('tx-modal-title').textContent = 'แก้ไขรายการ';
   txOverlay.classList.add('show');
 }
 
@@ -281,31 +308,43 @@ txForm.addEventListener('submit', async (e) => {
   // f-ticker/f-shares ไม่มี native `required` แล้ว (เพราะตอนอยู่คนละโหมดนึงจะโดนซ่อน
   // ด้วย display:none - required บน element ที่ซ่อนอยู่ทำให้ browser throw "not
   // focusable" แทนที่จะ submit) เช็คเองตรงนี้แทน ข้อความก็เลือกให้ตรงโหมดที่เห็นอยู่
+  if (txType === 'dividend' && !document.getElementById('f-div-ticker').value.trim()) {
+    showError(txError, 'กรอก Ticker ที่จ่ายปันผลก่อน'); return;
+  }
   if (txType === 'stock' && !document.getElementById('f-ticker').value.trim()) {
     showError(txError, 'กรอก Ticker ก่อน'); return;
   }
-  if (!(Number(document.getElementById('f-shares').value) > 0)) {
+  if (txType !== 'dividend' && !(Number(document.getElementById('f-shares').value) > 0)) {
     showError(txError, txType === 'gold' ? 'กรอกจำนวนกรัมก่อน' : 'กรอก Shares ก่อน'); return;
   }
 
   const id = document.getElementById('f-id').value;
+  const saveButton = document.getElementById('tx-save');
+  const isDividend = txType === 'dividend';
   const data = {
     date: document.getElementById('f-date').value,
-    action: document.getElementById('f-action').value,
-    ticker: document.getElementById('f-ticker').value.trim(),
-    price: Number(document.getElementById('f-price').value),
-    currency: document.getElementById('f-currency').value.trim() || 'USD',
-    shares: Number(document.getElementById('f-shares').value),
-    commission: Number(document.getElementById('f-commission').value || 0),
+    action: isDividend ? 'Dividend' : document.getElementById('f-action').value,
+    ticker: (isDividend ? document.getElementById('f-div-ticker').value : document.getElementById('f-ticker').value).trim(),
+    price: isDividend ? 0 : Number(document.getElementById('f-price').value),
+    currency: (isDividend ? document.getElementById('f-div-currency').value : document.getElementById('f-currency').value).trim() || 'USD',
+    shares: isDividend ? 0 : Number(document.getElementById('f-shares').value),
+    commission: isDividend ? 0 : Number(document.getElementById('f-commission').value || 0),
+    amount: isDividend ? Number(document.getElementById('f-div-amount').value) : 0,
+    tax: isDividend ? Number(document.getElementById('f-div-tax').value || 0) : 0,
     note: document.getElementById('f-note').value.trim(),
   };
   try {
+    saveButton.disabled = true;
+    saveButton.textContent = 'กำลังบันทึก…';
     if (id) await Api.update(id, data);
     else await Api.create(data);
     closeTxModal();
     await loadAndRender();
   } catch (err) {
     showError(txError, err.message);
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = 'บันทึก';
   }
 });
 
@@ -315,7 +354,7 @@ const confirmOverlay = document.getElementById('confirm-overlay');
 function openConfirmDelete(tx) {
   pendingDeleteId = tx.id;
   document.getElementById('confirm-text').textContent =
-    `${tx.date} · ${tx.action} · ${tx.ticker} · ${tx.shares} shares`;
+    `${tx.date} · ${ACTION_LABELS[tx.action] || tx.action} · ${tx.ticker} · ${tx.shares} หน่วย`;
   confirmOverlay.classList.add('show');
 }
 
@@ -352,6 +391,8 @@ const FIELD_ALIASES = {
   currency: ['currency'],
   shares: ['shares', 'qty', 'quantity'],
   commission: ['commission', 'fee', 'fees'],
+  amount: ['amount', 'dividend', 'gross_amount'],
+  tax: ['tax', 'withholding_tax'],
   note: ['note', 'notes'],
 };
 
@@ -371,6 +412,7 @@ function normalizeAction(raw) {
   const s = (raw || '').trim().toLowerCase();
   if (s === 'buy') return 'Buy';
   if (s === 'sell') return 'Sell';
+  if (['dividend', 'dividends', 'ปันผล', 'เงินปันผล'].includes(s)) return 'Dividend';
   if (['transfer in', 'transfer_in', 'transferin'].includes(s)) return 'Transfer in';
   if (['transfer out', 'transfer_out', 'transferout'].includes(s)) return 'Transfer out';
   return null;
@@ -388,19 +430,25 @@ function mapImportRow(obj, headerMap) {
   const shares = Number(get('shares'));
   const commissionRaw = get('commission');
   const commission = commissionRaw === '' ? 0 : Number(commissionRaw);
+  const amountRaw = get('amount');
+  const amount = amountRaw === '' ? 0 : Number(amountRaw);
+  const taxRaw = get('tax');
+  const tax = taxRaw === '' ? 0 : Number(taxRaw);
   const note = get('note');
 
   const reasons = [];
   if (!date) reasons.push('ไม่มีวันที่');
   if (!action) reasons.push('action ไม่รู้จัก' + (actionRaw ? ' (' + actionRaw + ')' : ''));
   if (!ticker) reasons.push('ไม่มี ticker');
-  if (!Number.isFinite(shares) || shares <= 0) reasons.push('shares ไม่ถูกต้อง');
+  if (action === 'Dividend') {
+    if (!Number.isFinite(amount) || amount <= 0) reasons.push('amount ไม่ถูกต้อง');
+  } else if (!Number.isFinite(shares) || shares <= 0) reasons.push('shares ไม่ถูกต้อง');
   if (!Number.isFinite(price) || price < 0) reasons.push('price ไม่ถูกต้อง');
 
   return {
     valid: reasons.length === 0,
     reason: reasons.join(', '),
-    row: { date, action: action || actionRaw, ticker, price: Number.isFinite(price) ? price : 0, currency, shares: Number.isFinite(shares) ? shares : 0, commission: Number.isFinite(commission) ? commission : 0, note },
+    row: { date, action: action || actionRaw, ticker, price: Number.isFinite(price) ? price : 0, currency, shares: Number.isFinite(shares) ? shares : 0, commission: Number.isFinite(commission) ? commission : 0, amount: Number.isFinite(amount) ? amount : 0, tax: Number.isFinite(tax) ? tax : 0, note },
   };
 }
 

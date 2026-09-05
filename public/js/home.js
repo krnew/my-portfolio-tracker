@@ -135,6 +135,7 @@ async function render() {
     } catch (e) {
       // price service unreachable - fall back to cost-basis-only view below
     }
+    AppUI.updatePriceStatus(priceData.prices, priceData.fx);
     priceData.prices = Currency.normalizePrices(priceData.prices, priceData.fx);
 
     const fxWarningEl = document.getElementById('fx-warning');
@@ -152,19 +153,24 @@ async function render() {
     setTile('tile-today', null, fmtMoney(p.totalDayChange) + '  ' + fmtPct(p.totalDayChangePct), null, signClass(p.totalDayChange));
     setTile('tile-unrealized', null, fmtMoney(p.totalUnrealizedGain), null, signClass(p.totalUnrealizedGain));
     setTile('tile-realized', null, fmtMoney(p.totalRealizedPL), null, signClass(p.totalRealizedPL));
+    const currentYear = todayLocalISO().slice(0, 4);
+    const dividendYtd = transactions
+      .filter((t) => t.action === 'Dividend' && t.date.startsWith(currentYear))
+      .reduce((sum, t) => sum + Math.max(0, (Number(t.amount) || 0) - (Number(t.tax) || 0)), 0);
+    setTile('tile-dividend', null, fmtMoney(dividendYtd), null, dividendYtd > 0 ? 'pos' : '');
 
     const oversold = p.rows.filter((r) => r.oversoldShares > 1e-9);
     const warningEl = document.getElementById('oversold-warning');
     if (oversold.length > 0) {
       const detail = oversold.map((r) => `${escapeHtml(r.ticker)} (ขายเกิน ${fmtShares(r.oversoldShares)} หุ้น)`).join(', ');
-      warningEl.textContent = `⚠️ พบรายการขายมากกว่าที่ซื้อไว้ในระบบ: ${detail} — แปลว่าอาจมีหุ้นที่ซื้อไว้ก่อนเริ่มบันทึกในนี้ ตัวเลข avg cost/realized P&L ของ ticker เหล่านี้จึงไม่ครบถ้วน แก้ไขได้ที่หน้า Transactions`;
+      warningEl.textContent = `⚠️ พบรายการขายมากกว่าที่ซื้อไว้ในระบบ: ${detail} — แปลว่าอาจมีหุ้นที่ซื้อไว้ก่อนเริ่มบันทึกในนี้ ตัวเลขต้นทุนเฉลี่ยและกำไรที่ขายแล้วของตัวเหล่านี้จึงไม่ครบถ้วน แก้ไขได้ที่หน้ารายการธุรกรรม`;
       warningEl.style.display = 'block';
     } else {
       warningEl.style.display = 'none';
     }
 
     if (p.rows.length === 0) {
-      body.innerHTML = '<tr><td colspan="8" class="empty">ยังไม่มีธุรกรรม — ไปที่หน้า Transactions เพื่อเพิ่ม</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="empty">ยังไม่มีธุรกรรม — ไปที่หน้ารายการธุรกรรมเพื่อเพิ่ม</td></tr>';
     } else {
       body.innerHTML = p.rows.map((r) => {
         const isOpen = r.shares > 1e-9;
@@ -173,22 +179,30 @@ async function render() {
         const unrCell = !isOpen ? '-' : (r.unrealizedGain !== null ? fmtMoney(r.unrealizedGain) : 'N/A');
         const dayCell = !isOpen ? '-' : (r.dayChange !== null ? fmtMoney(r.dayChange) : 'N/A');
         const oversoldFlag = r.oversoldShares > 1e-9 ? ' <span title="มีการขายมากกว่าที่ซื้อไว้ในระบบ - ตัวเลขนี้อาจไม่ครบ">⚠️</span>' : '';
+        // กำไรเป็น % ของต้นทุนตัวเอง - ตัวเลขที่บอกว่า "ตัวนี้ทำได้ดีแค่ไหน"
+        // ซึ่งจำนวนเงินอย่างเดียวบอกไม่ได้ (กำไร $200 จากทุน $500 กับจาก
+        // $10,000 คนละเรื่องกันเลย)
+        const unrPct = isOpen && r.unrealizedGain !== null && r.costBasis > 1e-9
+          ? (r.unrealizedGain / r.costBasis) * 100 : null;
         return `
         <tr>
           <td><strong>${escapeHtml(r.ticker)}</strong>${oversoldFlag}${r.stale ? ' <span title="ราคาช้า อาจไม่ใช่ล่าสุด">⚠️</span>' : ''}</td>
-          <td>${fmtShares(r.shares)}</td>
-          <td>${fmtMoney(r.avgCost)}</td>
-          <td>${lastCell}</td>
-          <td>${mvCell}</td>
-          <td class="${isOpen && r.unrealizedGain !== null ? signClass(r.unrealizedGain) : ''}">${unrCell}</td>
-          <td class="${isOpen && r.dayChange !== null ? signClass(r.dayChange) : ''}">${dayCell}</td>
-          <td class="${signClass(r.realizedPL)}">${fmtMoney(r.realizedPL)}</td>
+          <td class="num">${isOpen ? r.allocationPct.toFixed(1) + '%' : '-'}</td>
+          <td class="num">${fmtShares(r.shares)}</td>
+          <td class="num">${fmtMoney(r.avgCost)}</td>
+          <td class="num">${lastCell}</td>
+          <td class="num">${mvCell}</td>
+          <td class="num ${isOpen && r.unrealizedGain !== null ? signClass(r.unrealizedGain) : ''}">${unrCell}</td>
+          <td class="num ${unrPct === null ? '' : signClass(unrPct)}">${unrPct === null ? '-' : fmtPct(unrPct)}</td>
+          <td class="num ${isOpen && r.dayChange !== null ? signClass(r.dayChange) : ''}">${dayCell}</td>
+          <td class="num ${signClass(r.realizedPL)}">${fmtMoney(r.realizedPL)}</td>
         </tr>
       `;
       }).join('');
     }
   } catch (e) {
-    body.innerHTML = '<tr><td colspan="8" class="empty">โหลดข้อมูลไม่สำเร็จ: ' + escapeHtml(e.message) + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="10" class="empty">โหลดข้อมูลไม่สำเร็จ: ' + escapeHtml(e.message) + '</td></tr>';
+    AppUI.setDataStatus('อัปเดตข้อมูลไม่สำเร็จ', 'error');
   }
 }
 
